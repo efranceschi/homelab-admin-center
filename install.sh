@@ -2,14 +2,14 @@
 # ============================================================================
 # HomeLab Admin Center (HAC) — one-line web installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/efranceschi/homelab-admin-center/main/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/efranceschi/homelab-admin-center/prod/install.sh | sudo bash
 #
 # Clones (or updates) the project, seeds example config, and installs + starts
 # the `hac` systemd service. Run as root on the Proxmox node.
 #
 # Environment overrides:
 #   HAC_INSTALL_DIR  target directory   (default: /opt/lxc-ansible)
-#   HAC_BRANCH       git branch         (default: main)
+#   HAC_BRANCH       git branch         (default: prod  — the production branch)
 #   HAC_REPO         git repository URL (default: the public repo)
 #   HAC_NO_START=1   install but do not start the service
 # ============================================================================
@@ -17,7 +17,7 @@ set -euo pipefail
 
 REPO_URL="${HAC_REPO:-https://github.com/efranceschi/homelab-admin-center.git}"
 INSTALL_DIR="${HAC_INSTALL_DIR:-/opt/lxc-ansible}"
-BRANCH="${HAC_BRANCH:-main}"
+BRANCH="${HAC_BRANCH:-prod}"
 
 say() { echo -e "\033[1;36m[HAC]\033[0m $*"; }
 die() { echo -e "\033[1;31m[HAC] $*\033[0m" >&2; exit 1; }
