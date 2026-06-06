@@ -16,6 +16,31 @@ This repository contains two things:
 
 ---
 
+## Quick install (one line)
+
+On the Proxmox node, as root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/efranceschi/homelab-admin-center/main/install.sh | sudo bash
+```
+
+This installs prerequisites, clones the project to `/opt/lxc-ansible`, seeds config
+from the bundled examples, and installs + starts the **`hac`** systemd service. When it
+finishes, open `http://<host>:8910` and create the first admin account.
+
+Optional environment overrides:
+
+```bash
+# custom location / branch, or install without starting
+HAC_INSTALL_DIR=/opt/hac HAC_BRANCH=main HAC_NO_START=1 \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/efranceschi/homelab-admin-center/main/install.sh)"
+```
+
+Re-running the same command updates an existing install. (You can also update from the
+panel itself via **Administration → Update & restart**.)
+
+---
+
 ## What it does (per run)
 
 | Functionality | Role | Tags | Summary |

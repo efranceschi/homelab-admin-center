@@ -9,6 +9,7 @@
 set -euo pipefail
 
 PANEL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ANSIBLE_ROOT="$(dirname "${PANEL_DIR}")"
 UNIT_SRC="${PANEL_DIR}/systemd/hac.service"
 UNIT_DST="/etc/systemd/system/hac.service"
 
@@ -28,7 +29,13 @@ if [[ -f "${LEGACY_CRON}" ]]; then
 fi
 
 echo "[hac] installing unit -> ${UNIT_DST}"
-install -m 0644 "${UNIT_SRC}" "${UNIT_DST}"
+# Render the unit with the ACTUAL install paths so it works at any location
+# (the template ships with /opt/lxc-ansible defaults). Data paths under
+# /var/lib, /etc, /run, /var/log are intentionally left untouched.
+sed -e "s#/opt/lxc-ansible/webpanel#${PANEL_DIR}#g" \
+    -e "s#WorkingDirectory=/opt/lxc-ansible#WorkingDirectory=${ANSIBLE_ROOT}#g" \
+    "${UNIT_SRC}" > "${UNIT_DST}"
+chmod 0644 "${UNIT_DST}"
 
 systemctl daemon-reload
 systemctl enable hac.service
