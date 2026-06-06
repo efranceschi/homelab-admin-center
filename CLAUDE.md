@@ -4,11 +4,22 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-`lxc-ansible` — Ansible roles/playbooks for managing Proxmox LXC containers, plus
-the **HomeLab Admin Center (hac)** web panel under `webpanel/` (FastAPI, served by
-`uvicorn` via the `hac` systemd service on port 8910).
+**HomeLab Admin Center** (short name **HAC**, slug `hac`, repo
+`homelab-admin-center`). This repository contains two parts:
+
+1. The **Ansible framework** (`roles/`, `inventory/`, `playbooks/`, `run.sh`) —
+   idempotent automation for Proxmox LXC containers, driven via `pct exec`.
+2. The **HAC web control panel** under `webpanel/` (FastAPI, served by `uvicorn`
+   via the `hac` systemd service on port 8910).
+
+`lxc-ansible` is only the clone directory (`/opt/lxc-ansible`), not the project name.
 
 ## Working rules
+
+### Always write in English
+
+All written artifacts must be in English — commit messages, documentation, code,
+comments, and UI text — even though we may converse in Portuguese.
 
 ### Restart the panel after every change
 
@@ -26,6 +37,5 @@ via `curl -s http://127.0.0.1:8910/openapi.json`).
 
 ### Commit when a task is finished
 
-Whenever you finish a piece of work, make a git commit. **Write commit messages
-in English**, even though we converse in Portuguese. Keep the message focused on
-what changed and why.
+Whenever you finish a piece of work, make a git commit. Keep the message focused
+on what changed and why (in English, per the rule above).
