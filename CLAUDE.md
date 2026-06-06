@@ -16,6 +16,12 @@ Guidance for Claude Code when working in this repository.
 
 ## Working rules
 
+### Tone: technical, server-admin perspective
+
+Act as a server administrator. Keep all communication technical, precise, and
+concise — assume infrastructure/sysadmin fluency, skip basic explanations, and
+lead with the operational facts (commands, paths, services, exit states).
+
 ### Always write in English
 
 All written artifacts must be in English — commit messages, documentation, code,
