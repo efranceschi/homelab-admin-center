@@ -10,12 +10,12 @@
   <script src="/static/js/sse.js" defer></script>
   <script src="/static/js/bootstrap.bundle.min.js" defer></script>
 </head>
-<body>
+<body class="d-flex flex-column min-vh-100">
 {% if current_username %}
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
   <div class="container-fluid">
-    <a class="navbar-brand" href="/dashboard">{{ app_name }}
-      <span class="badge bg-secondary align-middle">{{ app_short }}</span></a>
+    <a class="navbar-brand" href="/dashboard">{{ instance_name or app_name }}
+      <span class="badge bg-secondary align-middle">{{ hostname }}</span></a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -23,14 +23,7 @@
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link" href="/dashboard">Dashboard</a></li>
 
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Infrastructure</a>
-          <ul class="dropdown-menu">
-            <li><h6 class="dropdown-header">Hosts</h6></li>
-            <li><a class="dropdown-item" href="/hosts">Managed hosts</a></li>
-            <li><a class="dropdown-item" href="/hosts#credentials">Credentials</a></li>
-          </ul>
-        </li>
+        <li class="nav-item"><a class="nav-link" href="/hosts">Infrastructure</a></li>
 
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Automation</a>
@@ -38,6 +31,18 @@
             <li><a class="dropdown-item" href="/plugins">Plugins</a></li>
             <li><a class="dropdown-item" href="/jobs">Run now</a></li>
             <li><a class="dropdown-item" href="/schedules">Schedules</a></li>
+          </ul>
+        </li>
+
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+             hx-get="/jobs/recent" hx-target="#recent-jobs-menu" hx-trigger="click">Jobs</a>
+          <ul class="dropdown-menu dropdown-menu-end" style="min-width:340px;max-height:75vh;overflow:auto">
+            <li><h6 class="dropdown-header d-flex justify-content-between align-items-center mb-0">
+              <span>Recent jobs</span>
+              <a href="/jobs" class="small text-decoration-none">All / Run&nbsp;&rarr;</a></h6></li>
+            <li><hr class="dropdown-divider my-1"></li>
+            <li><div id="recent-jobs-menu" class="px-3 py-2 text-muted small">Loading&hellip;</div></li>
           </ul>
         </li>
 
@@ -58,6 +63,8 @@
         </li>
         {% endif %}
       </ul>
+      <button type="button" class="btn btn-outline-light btn-sm me-3"
+              onclick="location.reload()" title="Refresh this page">↻ Refresh</button>
       <span class="navbar-text me-3">{{ current_username }}
         <span class="badge bg-info text-dark">{{ current_role }}</span></span>
       <form method="post" action="/logout" class="d-inline">
@@ -69,8 +76,61 @@
 </nav>
 {% endif %}
 
-<main class="container-fluid px-4 pb-5">
+<main class="container-fluid px-4 pb-4">
   {% block content %}{% endblock %}
 </main>
+
+<footer class="border-top mt-auto py-3 text-center text-muted small">
+  <a href="{{ app_repo_url }}" target="_blank" rel="noopener noreferrer"
+     class="link-secondary text-decoration-none">
+    <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"
+         class="align-text-bottom me-1" aria-hidden="true">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+        0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01
+        1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
+        0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27
+        2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82
+        1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01
+        2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
+    </svg>{{ instance_name or app_name }} on GitHub</a>
+  <span class="mx-1">·</span>v{{ app_version }}
+</footer>
+
+{% if current_username %}
+{# Reusable confirmation modal for destructive / state-changing actions.        #}
+{# Trigger from any element with data-confirm + data-action (POST endpoint):     #}
+{#   <button data-action="/x/1/delete" data-confirm="Delete X?"                  #}
+{#           data-title="Delete" data-ok="Delete" data-ok-class="btn-danger">    #}
+<div class="modal fade" id="confirm-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" id="confirm-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirm-title">Confirm</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="confirm-body">Are you sure?</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger" id="confirm-ok">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+document.addEventListener('click', function (ev) {
+  const t = ev.target.closest('[data-confirm]');
+  if (!t) return;
+  ev.preventDefault();
+  document.getElementById('confirm-form').action = t.getAttribute('data-action');
+  document.getElementById('confirm-title').textContent = t.getAttribute('data-title') || 'Confirm';
+  document.getElementById('confirm-body').textContent = t.getAttribute('data-confirm');
+  const ok = document.getElementById('confirm-ok');
+  ok.textContent = t.getAttribute('data-ok') || 'Confirm';
+  ok.className = 'btn ' + (t.getAttribute('data-ok-class') || 'btn-danger');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('confirm-modal')).show();
+});
+</script>
+{% endif %}
 </body>
 </html>
