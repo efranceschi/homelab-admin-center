@@ -3,20 +3,108 @@
 {% block content %}
 <h4 class="mb-3">Hosts</h4>
 
-<div class="row g-4">
-  <div class="col-lg-8">
-    <div class="card"><div class="card-header">Managed hosts</div>
+<ul class="nav nav-tabs" id="hostsTab" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="tab-hosts-btn" data-bs-toggle="tab" data-bs-target="#tab-hosts"
+            type="button" role="tab">Managed hosts <span class="badge bg-secondary">{{ servers|length }}</span></button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-creds-btn" data-bs-toggle="tab" data-bs-target="#tab-creds"
+            type="button" role="tab">Credentials <span class="badge bg-secondary">{{ credentials|length }}</span></button>
+  </li>
+</ul>
+
+<div class="tab-content border border-top-0 rounded-bottom bg-white mb-4">
+  {# ---- Managed hosts tab ---- #}
+  <div class="tab-pane fade show active" id="tab-hosts" role="tabpanel">
+    <div class="d-flex justify-content-between align-items-center p-2 px-3 border-bottom">
+      <span class="text-muted small">Encrypted connections to your managed hosts</span>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                data-action="/hosts/check-all"
+                data-title="Check all hosts" data-ok="Run check" data-ok-class="btn-primary"
+                data-confirm="Run a configuration drift check (--check) against all enabled hosts? This starts one job.">Check all</button>
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-host-modal">+ Add host</button>
+      </div>
+    </div>
+
+    {# ---- Filter toolbar -------------------------------------------------- #}
+    {# Objective, data-backed criteria: free-text (name/address/VMID/node),
+       connection-type toggles ("sliders"), config drift state, and enabled
+       state. All client-side — no round-trip, filters the rendered rows. #}
+    {% set conn_types = servers | map(attribute='connection_type') | unique | list %}
+    {% set conn_labels = {'local': 'Local', 'ssh': 'SSH host', 'proxmox': 'Proxmox LXC'} %}
+    {% if servers %}
+    <div class="p-2 px-3 border-bottom bg-body-tertiary" id="host-filters">
+      <div class="row g-2 align-items-center">
+        <div class="col-12 col-xl-4">
+          <input type="search" id="hf-search" class="form-control form-control-sm"
+                 placeholder="Filter by name, user@address, VMID or node…" autocomplete="off">
+        </div>
+        <div class="col-auto">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Config state">
+            <input type="radio" class="btn-check" name="hf-state" id="hfs-all" value="all" checked>
+            <label class="btn btn-outline-secondary" for="hfs-all">All states</label>
+            <input type="radio" class="btn-check" name="hf-state" id="hfs-updated" value="updated">
+            <label class="btn btn-outline-success" for="hfs-updated">Updated</label>
+            <input type="radio" class="btn-check" name="hf-state" id="hfs-ood" value="out_of_date">
+            <label class="btn btn-outline-warning" for="hfs-ood">Out of date</label>
+            <input type="radio" class="btn-check" name="hf-state" id="hfs-unknown" value="unknown">
+            <label class="btn btn-outline-secondary" for="hfs-unknown">Unknown</label>
+          </div>
+        </div>
+        {# Connection-type sliders — one per type actually present in the table. #}
+        <div class="col-auto d-flex align-items-center gap-3 flex-wrap">
+          {% for t in conn_types %}
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input hf-conn" type="checkbox" role="switch"
+                   id="hf-conn-{{ t }}" value="{{ t }}" checked>
+            <label class="form-check-label small text-nowrap" for="hf-conn-{{ t }}">{{ conn_labels.get(t, t) }}</label>
+          </div>
+          {% endfor %}
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="hf-enabled-only">
+            <label class="form-check-label small text-nowrap" for="hf-enabled-only">Enabled only</label>
+          </div>
+        </div>
+        <div class="col-auto ms-auto d-flex align-items-center gap-2">
+          <span class="text-muted small" id="hf-count"></span>
+          <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" id="hf-reset">Reset</button>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Credential</th><th>Enabled</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Config state</th><th>Credential</th><th>Enabled</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
       {% for s in servers %}
-        <tr>
+        {% set st = states.get(s.id) %}
+        <tr class="host-row"
+            data-search="{{ (s.name ~ ' ' ~ (s.ssh_user or '') ~ ' ' ~ (s.address or '') ~ ' ' ~ (s.proxmox_vmid or '') ~ ' ' ~ (s.proxmox_node or ''))|lower }}"
+            data-conn="{{ s.connection_type }}"
+            data-state="{{ st.config_status if st and st.config_status in ['updated', 'out_of_date'] else 'unknown' }}"
+            data-enabled="{{ '1' if s.enabled else '0' }}">
           <td>{{ s.name }}</td>
           <td><span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></td>
           <td>
-            {% if s.connection_type == 'proxmox' %}VMID {{ s.proxmox_vmid }}{% if s.proxmox_node %} @ {{ s.proxmox_node }}{% endif %}
+            {% if s.connection_type == 'proxmox' %}
+              VMID {{ s.proxmox_vmid }}
+              <span class="badge bg-light text-dark border ms-1" title="Proxmox node hosting this container">🖳 {{ s.proxmox_node or hostname }}</span>
             {% elif s.connection_type == 'ssh' %}{{ s.ssh_user }}@{{ s.address }}{% if s.port %}:{{ s.port }}{% endif %}
             {% else %}localhost{% endif %}
+          </td>
+          <td>
+            {% if st and st.config_status == 'out_of_date' %}
+              <span class="badge bg-warning text-dark">Out of date{% if st.pending_changes %} ({{ st.pending_changes }}){% endif %}</span>
+            {% elif st and st.config_status == 'updated' %}
+              <span class="badge bg-success">Updated</span>
+            {% else %}
+              <span class="badge bg-secondary">Unknown</span>
+            {% endif %}
+            {% if st and st.config_checked_at %}
+              <div class="text-muted small">{{ st.config_checked_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+            {% endif %}
           </td>
           <td>{{ s.credential.name if s.credential else '—' }}</td>
           <td>
@@ -26,54 +114,93 @@
                 {{ 'on' if s.enabled else 'off' }}</button>
             </form>
           </td>
-          <td>
-            <form method="post" action="/hosts/{{ s.id }}/delete" class="d-inline"
-                  onsubmit="return confirm('Delete host {{ s.name }}?')">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button class="btn btn-sm btn-outline-danger">✕</button>
-            </form>
+          <td class="text-end text-nowrap">
+            {% if st and st.config_status == 'out_of_date' and current_role == 'admin' %}
+            {# Out of date: offer Apply as the default action, with Check in the dropdown. #}
+            <div class="btn-group" role="group">
+              <button type="button" class="btn btn-sm btn-warning"
+                      data-action="/hosts/{{ s.id }}/apply"
+                      data-title="Apply host" data-ok="Apply" data-ok-class="btn-warning"
+                      data-confirm="Apply configuration to “{{ s.name }}” to bring it up to date?">Apply</button>
+              <button type="button" class="btn btn-sm btn-warning dropdown-toggle dropdown-toggle-split"
+                      data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="visually-hidden">Toggle action</span></button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><button type="button" class="dropdown-item"
+                        data-action="/hosts/{{ s.id }}/check"
+                        data-title="Check host" data-ok="Run check" data-ok-class="btn-primary"
+                        data-confirm="Run a drift check (--check) against “{{ s.name }}”?">Check</button></li>
+              </ul>
+            </div>
+            {% else %}
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    data-action="/hosts/{{ s.id }}/check"
+                    data-title="Check host" data-ok="Run check" data-ok-class="btn-primary"
+                    data-confirm="Run a drift check (--check) against “{{ s.name }}”?">Check</button>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-outline-danger"
+                    data-action="/hosts/{{ s.id }}/delete"
+                    data-title="Delete host" data-ok="Delete"
+                    data-confirm="Delete host “{{ s.name }}”? This cannot be undone.">Delete</button>
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="text-muted">No hosts yet.</td></tr>
+        <tr><td colspan="7" class="text-muted">No hosts yet.</td></tr>
       {% endfor %}
+        <tr id="hf-empty" hidden><td colspan="7" class="text-muted text-center py-3">
+          No hosts match the current filters.</td></tr>
       </tbody>
-    </table></div></div>
+    </table></div>
+  </div>
 
-    <div class="card mt-4" id="credentials"><div class="card-header">Credentials (encrypted at rest)</div>
+  {# ---- Credentials tab ---- #}
+  <div class="tab-pane fade" id="tab-creds" role="tabpanel">
+    <div class="d-flex justify-content-between align-items-center p-2 px-3 border-bottom">
+      <span class="text-muted small">Secrets encrypted at rest</span>
+      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-cred-modal">+ Add credential</button>
+    </div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Name</th><th>Type</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Type</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
       {% for c in credentials %}
-        <tr><td>{{ c.name }}</td><td>{{ c.type }}</td>
-          <td><form method="post" action="/hosts/credentials/{{ c.id }}/delete" class="d-inline"
-                    onsubmit="return confirm('Delete credential {{ c.name }}?')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="btn btn-sm btn-outline-danger">✕</button></form></td></tr>
+        <tr>
+          <td>{{ c.name }}</td><td>{{ c.type }}</td>
+          <td class="text-end">
+            <button type="button" class="btn btn-sm btn-outline-danger"
+                    data-action="/hosts/credentials/{{ c.id }}/delete"
+                    data-title="Delete credential" data-ok="Delete"
+                    data-confirm="Delete credential “{{ c.name }}”? Hosts using it will lose access.">Delete</button>
+          </td>
+        </tr>
       {% else %}
         <tr><td colspan="3" class="text-muted">No credentials yet.</td></tr>
       {% endfor %}
       </tbody>
-    </table></div></div>
+    </table></div>
   </div>
+</div>
 
-  <div class="col-lg-4">
-    <div class="card mb-4"><div class="card-header">Add host</div><div class="card-body">
-      <form method="post" action="/hosts">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="mb-2"><label class="form-label">Name (inventory hostname)</label>
-          <input class="form-control form-control-sm" name="name" required></div>
+{# ---- Add host modal ----------------------------------------------------- #}
+<div class="modal fade" id="add-host-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="/hosts">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="modal-header">
+        <h5 class="modal-title">Add host</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2" id="host-name-group"><label class="form-label">Name (inventory hostname)</label>
+          <input class="form-control form-control-sm" name="name" id="host-name" required></div>
         <div class="mb-2"><label class="form-label">Connection type</label>
-          <select class="form-select form-select-sm" name="connection_type" id="ctype"
-                  onchange="document.querySelectorAll('.ct').forEach(e=>e.style.display='none');
-                            document.getElementById('ct-'+this.value).style.display='block';">
+          <select class="form-select form-select-sm" name="connection_type" id="ctype">
             <option value="local">local</option>
             <option value="ssh">ssh</option>
             <option value="proxmox">proxmox</option>
           </select></div>
 
-        <div class="ct" id="ct-local" style="display:none">
-          <p class="text-muted small">Runs against the panel host itself.</p></div>
+        <div class="ct" id="ct-local">
+          <p class="text-muted small mb-0">Runs against the panel host itself.</p></div>
 
         <div class="ct" id="ct-ssh" style="display:none">
           <div class="mb-2"><label class="form-label">Address</label>
@@ -91,20 +218,52 @@
         </div>
 
         <div class="ct" id="ct-proxmox" style="display:none">
-          <div class="mb-2"><label class="form-label">Proxmox node</label>
-            <input class="form-control form-control-sm" name="proxmox_node" placeholder="pve1"></div>
+          {% if pct_containers %}
+          <label class="form-label">Containers</label>
+          <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" id="pct-all" name="proxmox_all" value="1">
+            <label class="form-check-label" for="pct-all">All containers ({{ pct_containers|length }})</label>
+          </div>
+          <div class="border rounded p-2" id="pct-list" style="max-height:200px;overflow:auto">
+            {% for c in pct_containers %}
+            <div class="form-check">
+              <input class="form-check-input pct-cb" type="checkbox" name="proxmox_vmids"
+                     value="{{ c.vmid }}" id="pct{{ c.vmid }}">
+              <label class="form-check-label" for="pct{{ c.vmid }}">
+                {{ c.vmid }} — {{ c.name }}{% if c.status %} <span class="text-muted small">({{ c.status }})</span>{% endif %}</label>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="form-text">Each selected container is added as its own host, named after the container.</div>
+          {% elif pct_available %}
+          <div class="alert alert-info py-2 mb-0">All containers on this node are already registered.</div>
+          {% else %}
           <div class="mb-2"><label class="form-label">Container VMID</label>
-            <input class="form-control form-control-sm" name="proxmox_vmid" placeholder="105"></div>
-          <p class="text-muted small">Uses the pct connection plugin (run on the Proxmox node as root).</p>
+            <input class="form-control form-control-sm" name="proxmox_vmids" placeholder="105">
+            <div class="form-text">No containers detected — is the panel running on the Proxmox node? Enter the VMID manually.</div>
+          </div>
+          {% endif %}
+          <p class="text-muted small mb-0">Reached locally via <code>pct exec</code> — the panel must run on this Proxmox node as root.</p>
         </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary">Add host</button>
+      </div>
+    </form>
+  </div>
+</div>
 
-        <button class="btn btn-primary btn-sm w-100 mt-2">Add host</button>
-      </form>
-    </div></div>
-
-    <div class="card"><div class="card-header">Add credential</div><div class="card-body">
-      <form method="post" action="/hosts/credentials">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+{# ---- Add credential modal ----------------------------------------------- #}
+<div class="modal fade" id="add-cred-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="/hosts/credentials">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="modal-header">
+        <h5 class="modal-title">Add credential</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
         <div class="mb-2"><label class="form-label">Name</label>
           <input class="form-control form-control-sm" name="name" required></div>
         <div class="mb-2"><label class="form-label">Type</label>
@@ -119,9 +278,103 @@
                     placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."></textarea></div>
         <div class="mb-2"><label class="form-label">Note (optional)</label>
           <input class="form-control form-control-sm" name="meta"></div>
-        <button class="btn btn-outline-primary btn-sm w-100">Add credential</button>
-      </form>
-    </div></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary">Add credential</button>
+      </div>
+    </form>
   </div>
 </div>
+
+<script>
+  // Add host modal: show only the active connection-type fields. Proxmox adds
+  // one host per selected container (or all), so the single Name field is hidden
+  // and not required there; the "All containers" switch disables the per-row
+  // checkboxes; submit is blocked if nothing is selected.
+  (function () {
+    const modal = document.getElementById('add-host-modal');
+    if (!modal) return;
+    const form = modal.querySelector('form');
+    const typeSel = document.getElementById('ctype');
+    const nameGroup = document.getElementById('host-name-group');
+    const nameInp = document.getElementById('host-name');
+    const allCb = document.getElementById('pct-all');
+    const cbs = () => Array.from(modal.querySelectorAll('.pct-cb'));
+    const isProxmox = () => typeSel.value === 'proxmox';
+
+    function syncType() {
+      const v = typeSel.value;
+      modal.querySelectorAll('.ct').forEach(e => e.style.display = 'none');
+      const block = document.getElementById('ct-' + v);
+      if (block) block.style.display = 'block';
+      nameGroup.style.display = isProxmox() ? 'none' : 'block';
+      nameInp.required = !isProxmox();
+    }
+    typeSel.addEventListener('change', syncType);
+    modal.addEventListener('shown.bs.modal', syncType);
+
+    if (allCb) allCb.addEventListener('change', () =>
+      cbs().forEach(cb => { cb.disabled = allCb.checked; }));
+
+    form.addEventListener('submit', function (ev) {
+      if (!isProxmox()) return;
+      const list = cbs();
+      if (list.length === 0 && !allCb) return;  // free-text fallback
+      const any = (allCb && allCb.checked) || list.some(cb => cb.checked);
+      if (!any) {
+        ev.preventDefault();
+        alert('Select at least one container, or check “All containers”.');
+      }
+    });
+  })();
+
+  // Host filters: client-side, AND-combined across search text, connection-type
+  // switches, config-drift state, and the enabled-only switch. Updates the match
+  // counter and an empty-state row; no server round-trip.
+  (function () {
+    const wrap = document.getElementById('host-filters');
+    if (!wrap) return;
+    const rows = Array.from(document.querySelectorAll('#tab-hosts tr.host-row'));
+    const search = document.getElementById('hf-search');
+    const enabledOnly = document.getElementById('hf-enabled-only');
+    const connBoxes = Array.from(wrap.querySelectorAll('.hf-conn'));
+    const empty = document.getElementById('hf-empty');
+    const count = document.getElementById('hf-count');
+
+    const activeState = () =>
+      (wrap.querySelector('input[name="hf-state"]:checked') || {}).value || 'all';
+
+    function apply() {
+      const q = search.value.trim().toLowerCase();
+      const state = activeState();
+      const conns = new Set(connBoxes.filter(c => c.checked).map(c => c.value));
+      const enOnly = enabledOnly.checked;
+      let shown = 0;
+      rows.forEach(row => {
+        const ok =
+          (!q || row.dataset.search.includes(q)) &&
+          conns.has(row.dataset.conn) &&
+          (state === 'all' || row.dataset.state === state) &&
+          (!enOnly || row.dataset.enabled === '1');
+        row.hidden = !ok;
+        if (ok) shown++;
+      });
+      if (empty) empty.hidden = shown !== 0;
+      if (count) count.textContent = shown + ' of ' + rows.length;
+    }
+
+    wrap.addEventListener('input', apply);
+    wrap.addEventListener('change', apply);
+    document.getElementById('hf-reset').addEventListener('click', () => {
+      search.value = '';
+      connBoxes.forEach(c => { c.checked = true; });
+      enabledOnly.checked = false;
+      const all = document.getElementById('hfs-all');
+      if (all) all.checked = true;
+      apply();
+    });
+    apply();
+  })();
+</script>
 {% endblock %}
