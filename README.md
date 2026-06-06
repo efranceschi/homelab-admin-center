@@ -78,7 +78,8 @@ Any extra arguments to `run.sh` are passed straight through to `ansible-playbook
 
 ## Web control panel — HomeLab Admin Center (`hac`)
 
-`webpanel/` contains **HomeLab Admin Center** (short name `hac`), a self-contained FastAPI
+`webpanel/` contains **HomeLab Admin Center** (short name **HAC**; technical slug `hac`),
+a self-contained FastAPI
 application that provides a visual dashboard over the same Ansible roles. It is **additive**:
 it never edits `ansible.cfg`, `run.sh`, `site.yml`, the roles, the connection plugin, or
 `group_vars`, so the existing CLI/automation keeps working unchanged.

@@ -8,9 +8,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# Branding.
+# Branding — three canonical forms used throughout the project:
+#   APP_NAME  : long display name  -> "HomeLab Admin Center"
+#   APP_SHORT : short display name  -> "HAC"
+#   APP_SLUG  : technical id / sigla (systemd unit, paths) -> "hac"
 APP_NAME = "HomeLab Admin Center"
-APP_SHORT = "hac"
+APP_SHORT = "HAC"
+APP_SLUG = "hac"
 APP_VERSION = "0.1.0"
 
 # webpanel/app/config.py -> webpanel/app -> webpanel -> <ANSIBLE_ROOT>

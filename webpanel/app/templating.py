@@ -8,8 +8,9 @@ from . import config
 from .auth import get_csrf_token
 
 templates = Jinja2Templates(directory=str(config.APP_DIR / "templates"))
-templates.env.globals["app_name"] = config.APP_NAME
-templates.env.globals["app_short"] = config.APP_SHORT
+templates.env.globals["app_name"] = config.APP_NAME       # long: HomeLab Admin Center
+templates.env.globals["app_short"] = config.APP_SHORT     # short: HAC
+templates.env.globals["app_slug"] = config.APP_SLUG       # sigla: hac
 templates.env.globals["app_version"] = config.APP_VERSION
 
 
