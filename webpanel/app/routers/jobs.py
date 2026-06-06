@@ -8,7 +8,8 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..ansible_layer.service import JobBusyError, start_job
+from ..ansi import ansi_to_html
+from ..ansible_layer.service import JobBusyError, recover_selection, start_job
 from ..auth import current_user, require_admin, verify_csrf
 from ..db import db_dependency
 from ..jobs import manager
@@ -40,6 +41,17 @@ def jobs_home(
         history=history,
         busy=manager.is_busy(),
     )
+
+
+@router.get("/recent")
+def jobs_recent(
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(current_user),
+):
+    """HTML fragment for the navbar Jobs dropdown: the latest runs."""
+    jobs = db.scalars(select(Job).order_by(Job.id.desc()).limit(10)).all()
+    return render(request, "_recent_jobs.html", jobs=jobs)
 
 
 @router.post("/run", dependencies=[Depends(verify_csrf)])
@@ -91,9 +103,16 @@ def job_detail(
                 log_text = fh.read()
         except OSError:
             log_text = ""
+    # Fall back to the persisted copy when the run dir has been cleaned up.
+    if not log_text and job.log_text:
+        log_text = job.log_text
     live = manager.active is not None and manager.active.job_id == job_id
     return render(
-        request, "job_detail.html", job=job, log_text=log_text, live=live
+        request,
+        "job_detail.html",
+        job=job,
+        log_html=ansi_to_html(log_text),
+        live=live,
     )
 
 
@@ -103,12 +122,22 @@ async def job_stream(
     request: Request,
     user: User = Depends(current_user),
 ):
+    # Disable response buffering on any reverse proxy in front of the panel
+    # (nginx honours X-Accel-Buffering); without this the browser only sees the
+    # whole log once the connection closes, instead of line-by-line.
+    sse_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
     rt = manager.active
     if rt is None or rt.job_id != job_id:
         async def _empty():
             yield "event: done\ndata: not-live\n\n"
 
-        return StreamingResponse(_empty(), media_type="text/event-stream")
+        return StreamingResponse(
+            _empty(), media_type="text/event-stream", headers=sse_headers
+        )
 
     async def event_gen():
         q = rt.subscribe()
@@ -124,12 +153,104 @@ async def job_stream(
                 if line == "__PANEL_JOB_DONE__":
                     yield "event: done\ndata: done\n\n"
                     break
-                payload = line.rstrip("\n")
+                payload = ansi_to_html(line.rstrip("\n"))
                 yield f"data: {payload}\n\n"
         finally:
             rt.unsubscribe(q)
 
-    return StreamingResponse(event_gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_gen(), media_type="text/event-stream", headers=sse_headers
+    )
+
+
+@router.post("/{job_id}/retry", dependencies=[Depends(verify_csrf)])
+async def retry_job(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(current_user),
+):
+    """Re-run a finished job with its original target and plugin selection.
+
+    Covers retrying a failed/cancelled run and re-running a successful one
+    ("Executar Novamente"); only an in-flight (queued/running) job is rejected.
+    """
+    job = db.get(Job, job_id)
+    if job is None:
+        return RedirectResponse("/jobs", status_code=303)
+    if job.status not in ("success", "failed", "cancelled"):
+        return render(
+            request, "error.html", message="Only finished jobs can be re-run."
+        )
+    # Apply mode is admin-only, matching the run endpoint.
+    if job.mode == "apply" and user.role != "admin":
+        return render(request, "error.html", message="Only admins can apply changes.")
+
+    server_ids, plugin_ids = recover_selection(db, job)
+    if not server_ids or not plugin_ids:
+        return render(
+            request,
+            "error.html",
+            message="Cannot retry: the original targets or plugins are no longer available.",
+        )
+
+    try:
+        new_job = await start_job(
+            db,
+            user_id=user.id,
+            server_ids=server_ids,
+            plugin_ids=plugin_ids,
+            mode=job.mode,
+        )
+    except (JobBusyError, ValueError) as exc:
+        return render(request, "error.html", message=str(exc))
+    return RedirectResponse(f"/jobs/{new_job.id}", status_code=303)
+
+
+@router.post("/{job_id}/apply", dependencies=[Depends(verify_csrf)])
+async def apply_from_job(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(current_user),
+):
+    """Promote a successful check (dry run) into a fresh apply job.
+
+    Starts a new, separate job in apply mode against the same targets and
+    plugins as the source check — so the dry run and the real apply remain
+    distinct entries in history. Apply is admin-only, matching /run.
+    """
+    if user.role != "admin":
+        return render(request, "error.html", message="Only admins can apply changes.")
+    job = db.get(Job, job_id)
+    if job is None:
+        return RedirectResponse("/jobs", status_code=303)
+    if job.mode != "check" or job.status != "success":
+        return render(
+            request,
+            "error.html",
+            message="Apply is only offered for a successful check run.",
+        )
+
+    server_ids, plugin_ids = recover_selection(db, job)
+    if not server_ids or not plugin_ids:
+        return render(
+            request,
+            "error.html",
+            message="Cannot apply: the original targets or plugins are no longer available.",
+        )
+
+    try:
+        new_job = await start_job(
+            db,
+            user_id=user.id,
+            server_ids=server_ids,
+            plugin_ids=plugin_ids,
+            mode="apply",
+        )
+    except (JobBusyError, ValueError) as exc:
+        return render(request, "error.html", message=str(exc))
+    return RedirectResponse(f"/jobs/{new_job.id}", status_code=303)
 
 
 @router.post("/{job_id}/cancel", dependencies=[Depends(verify_csrf)])

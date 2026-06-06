@@ -33,10 +33,17 @@
                 data-title="Retry job" data-ok="Retry" data-ok-class="btn-primary"
                 data-confirm="Re-run job #{{ j.id }} ({{ j.mode }}) on {{ j.target_ref }}?">Retry</button>
         {% elif j.status == 'success' and (j.mode != 'apply' or current_role == 'admin') %}
+        {% if j.mode == 'check' and current_role == 'admin' %}
+        {# Promote a successful dry run into a separate apply job. #}
+        <button type="button" class="btn btn-warning btn-sm py-0"
+                data-action="/jobs/{{ j.id }}/apply" {% if busy %}disabled{% endif %}
+                data-title="Apply changes" data-ok="Apply" data-ok-class="btn-warning"
+                data-confirm="Apply the changes previewed by check #{{ j.id }} on {{ j.target_ref }}? This starts a new apply job.">Apply</button>
+        {% endif %}
         <button type="button" class="btn btn-outline-primary btn-sm py-0"
                 data-action="/jobs/{{ j.id }}/retry" {% if busy %}disabled{% endif %}
-                data-title="Executar Novamente" data-ok="Executar Novamente" data-ok-class="btn-primary"
-                data-confirm="Executar novamente o job #{{ j.id }} ({{ j.mode }}) em {{ j.target_ref }}?">Executar Novamente</button>
+                data-title="Re-run job" data-ok="Re-run" data-ok-class="btn-primary"
+                data-confirm="Re-run job #{{ j.id }} ({{ j.mode }}) on {{ j.target_ref }}?">Re-run</button>
         {% endif %}
       </td>
     </tr>

@@ -34,10 +34,20 @@
           data-confirm="Re-run job #{{ job.id }} ({{ job.mode }}) on {{ job.target_ref }}?">Retry</button>
   {% elif not live and job.status == 'success'
           and (job.mode != 'apply' or current_role == 'admin') %}
-  <button type="button" class="btn btn-outline-primary btn-sm"
-          data-action="/jobs/{{ job.id }}/retry"
-          data-title="Executar Novamente" data-ok="Executar Novamente" data-ok-class="btn-primary"
-          data-confirm="Executar novamente o job #{{ job.id }} ({{ job.mode }}) em {{ job.target_ref }}?">Executar Novamente</button>
+  <div class="d-flex gap-2">
+    {# A successful check (dry run) can be promoted into a real apply, which
+       starts a separate apply job rather than re-running the check. #}
+    {% if job.mode == 'check' and current_role == 'admin' %}
+    <button type="button" class="btn btn-warning btn-sm"
+            data-action="/jobs/{{ job.id }}/apply"
+            data-title="Apply changes" data-ok="Apply" data-ok-class="btn-warning"
+            data-confirm="Apply the changes previewed by check #{{ job.id }} on {{ job.target_ref }}? This starts a new apply job.">Apply</button>
+    {% endif %}
+    <button type="button" class="btn btn-outline-primary btn-sm"
+            data-action="/jobs/{{ job.id }}/retry"
+            data-title="Re-run job" data-ok="Re-run" data-ok-class="btn-primary"
+            data-confirm="Re-run job #{{ job.id }} ({{ job.mode }}) on {{ job.target_ref }}?">Re-run</button>
+  </div>
   {% endif %}
 </div>
 
