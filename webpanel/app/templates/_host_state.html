@@ -1,0 +1,23 @@
+{# Config-state cell for one host. Shared by the hosts table (initial render)
+   and the /hosts/states live-refresh endpoint so both look identical.
+   Expects `st` (HostState or None) and `live` ('checking'|'applying'|None). #}
+{% if live == 'checking' %}
+  <span class="badge bg-info text-dark">
+    <span class="spinner-border spinner-border-sm" style="--bs-spinner-width:.7em;--bs-spinner-height:.7em" role="status" aria-hidden="true"></span>
+    Checking…</span>
+{% elif live == 'applying' %}
+  <span class="badge bg-warning text-dark">
+    <span class="spinner-border spinner-border-sm" style="--bs-spinner-width:.7em;--bs-spinner-height:.7em" role="status" aria-hidden="true"></span>
+    Applying…</span>
+{% elif st and st.config_status == 'out_of_date' %}
+  <span class="badge bg-warning text-dark">Out of date{% if st.pending_changes %} ({{ st.pending_changes }}){% endif %}</span>
+{% elif st and st.config_status == 'updated' %}
+  <span class="badge bg-success">Updated</span>
+{% else %}
+  <span class="badge bg-secondary">Unknown</span>
+{% endif %}
+{% if live %}
+  <div class="text-muted small">in progress…</div>
+{% elif st and st.config_checked_at %}
+  <div class="text-muted small">{{ st.config_checked_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+{% endif %}

@@ -94,17 +94,9 @@
             {% elif s.connection_type == 'ssh' %}{{ s.ssh_user }}@{{ s.address }}{% if s.port %}:{{ s.port }}{% endif %}
             {% else %}localhost{% endif %}
           </td>
-          <td>
-            {% if st and st.config_status == 'out_of_date' %}
-              <span class="badge bg-warning text-dark">Out of date{% if st.pending_changes %} ({{ st.pending_changes }}){% endif %}</span>
-            {% elif st and st.config_status == 'updated' %}
-              <span class="badge bg-success">Updated</span>
-            {% else %}
-              <span class="badge bg-secondary">Unknown</span>
-            {% endif %}
-            {% if st and st.config_checked_at %}
-              <div class="text-muted small">{{ st.config_checked_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
-            {% endif %}
+          <td class="host-state-cell" data-sid="{{ s.id }}">
+            {% set live = live_status.get(s.id) %}
+            {% include "_host_state.html" %}
           </td>
           <td>{{ s.credential.name if s.credential else '—' }}</td>
           <td>
@@ -375,6 +367,38 @@
       apply();
     });
     apply();
+  })();
+
+  // Live host status: poll /hosts/states so the Config-state column shows
+  // Checking…/Applying… while a job runs, and settles to the result when it
+  // finishes. Fast cadence while busy, slow when idle. Filters are re-applied
+  // after each update so a host that changes state stays correctly filtered.
+  (function () {
+    const cells = Array.from(document.querySelectorAll('.host-state-cell'));
+    if (!cells.length) return;
+    const search = document.getElementById('hf-search');
+    const BUSY_MS = 2000, IDLE_MS = 10000;
+
+    async function poll() {
+      let busy = false;
+      try {
+        const r = await fetch('/hosts/states', { headers: { 'X-Requested-With': 'fetch' } });
+        if (r.ok) {
+          const data = await r.json();
+          busy = !!data.busy;
+          cells.forEach(cell => {
+            const sid = cell.dataset.sid;
+            if (data.cells && data.cells[sid] != null) cell.innerHTML = data.cells[sid];
+            const row = cell.closest('tr');
+            if (row && data.states && data.states[sid]) row.dataset.state = data.states[sid];
+          });
+          // Re-run the filters so newly-settled states respect the active filter.
+          if (search) search.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      } catch (e) { /* transient; retry on next tick */ }
+      setTimeout(poll, busy ? BUSY_MS : IDLE_MS);
+    }
+    setTimeout(poll, BUSY_MS);
   })();
 </script>
 {% endblock %}
