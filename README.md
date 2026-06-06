@@ -213,9 +213,18 @@ ansible-vault edit inventory/group_vars/all/vault.yml   # URI, base DN, bind DN/
 
 ## Versioning
 
-```bash
-cd /opt/lxc-ansible && git init && git add -A && git commit -m "baseline lxc-ansible"
-```
-
 `.gitignore` already excludes the venvs, vendored collections, logs, the vault password, the
 panel master key, the panel database, and per-job run directories.
+
+### Branches
+
+- **`main`** — default / development branch (latest work).
+- **`prod`** — production / stable branch. The one-line installer and the in-app
+  **Update & restart** pull from `prod` by default.
+
+Promote a tested `main` to production with a fast-forward:
+
+```bash
+git checkout prod && git merge --ff-only main && git push origin prod
+git checkout main
+```
