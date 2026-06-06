@@ -1,0 +1,56 @@
+# Gerado por lxc-ansible (role authentik_sssd). NÃO editar manualmente.
+[sssd]
+config_file_version = 2
+services = nss, pam
+domains = {{ authentik_sssd_domain }}
+
+[nss]
+# Nunca resolver root via LDAP — protege o fallback local.
+filter_users = root
+filter_groups = root
+
+[pam]
+offline_credentials_expiration = 7
+
+[domain/{{ authentik_sssd_domain }}]
+id_provider = ldap
+auth_provider = ldap
+chpass_provider = none
+access_provider = permit
+
+ldap_uri = {{ authentik_ldap_uri }}
+ldap_search_base = {{ authentik_ldap_base_dn }}
+ldap_default_bind_dn = {{ authentik_ldap_bind_dn }}
+ldap_default_authtok_type = password
+ldap_default_authtok = {{ authentik_ldap_bind_password }}
+
+ldap_schema = rfc2307bis
+ldap_user_object_class = {{ authentik_ldap_user_object_class }}
+ldap_group_object_class = {{ authentik_ldap_group_object_class }}
+ldap_user_name = {{ authentik_ldap_user_name_attr }}
+ldap_user_uid_number = {{ authentik_ldap_user_uid_attr }}
+ldap_user_gid_number = {{ authentik_ldap_user_gid_attr }}
+ldap_user_home_directory = {{ authentik_ldap_user_home_attr }}
+ldap_user_shell = {{ authentik_ldap_user_shell_attr }}
+
+cache_credentials = true
+enumerate = false
+# loginShell não é populado pelo Authentik -> shell/home padrão
+default_shell = {{ authentik_default_shell }}
+fallback_homedir = {{ authentik_fallback_homedir }}
+{% if authentik_ldap_tls_mode == 'start_tls' %}
+ldap_id_use_start_tls = true
+ldap_tls_reqcert = demand
+{% if authentik_ldap_ca_cert is defined and authentik_ldap_ca_cert | length > 0 %}
+ldap_tls_cacert = /etc/sssd/authentik-ca.crt
+{% endif %}
+{% elif authentik_ldap_tls_mode == 'ldaps' %}
+ldap_tls_reqcert = demand
+{% if authentik_ldap_ca_cert is defined and authentik_ldap_ca_cert | length > 0 %}
+ldap_tls_cacert = /etc/sssd/authentik-ca.crt
+{% endif %}
+{% else %}
+ldap_id_use_start_tls = false
+ldap_tls_reqcert = never
+ldap_auth_disable_tls_never_use_in_production = true
+{% endif %}

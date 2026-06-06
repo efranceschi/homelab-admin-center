@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/css/panel.css">
+  <script src="/static/js/htmx.min.js" defer></script>
+  <script src="/static/js/sse.js" defer></script>
+  <script src="/static/js/bootstrap.bundle.min.js" defer></script>
+</head>
+<body>
+{% if current_username %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/dashboard">{{ app_name }}
+      <span class="badge bg-secondary align-middle">{{ app_short }}</span></a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/dashboard">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="/hosts">Hosts</a></li>
+        <li class="nav-item"><a class="nav-link" href="/plugins">Plugins</a></li>
+        <li class="nav-item"><a class="nav-link" href="/jobs">Run</a></li>
+        <li class="nav-item"><a class="nav-link" href="/settings">Settings</a></li>
+      </ul>
+      <span class="navbar-text me-3">{{ current_username }}
+        <span class="badge bg-info text-dark">{{ current_role }}</span></span>
+      <form method="post" action="/logout" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
+      </form>
+    </div>
+  </div>
+</nav>
+{% endif %}
+
+<main class="container-fluid px-4 pb-5">
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

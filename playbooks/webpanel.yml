@@ -1,0 +1,36 @@
+---
+# Parametric playbook used ONLY by the web control panel (webpanel/).
+# It mirrors site.yml's role/tag structure but is fully decoupled from the
+# daily cron run: the panel selects functionality with --tags, targets hosts
+# with --limit, and layers configuration via --extra-vars. site.yml is never
+# touched, so the cron path keeps working unchanged.
+- name: lxc-ansible web panel run
+  hosts: all
+  gather_facts: true
+  become: false # pct exec is already root; ssh/local can opt in via become if needed.
+  serial: "{{ panel_serial | default('100%') }}"
+
+  roles:
+    - role: common_timezone
+      tags: [timezone]
+    - role: ssh_baseline
+      tags: [ssh]
+    - role: authentik_sssd
+      tags: [auth, sssd]
+      when: authentik_sssd_enabled | default(false) | bool
+    - role: apt_maintenance
+      tags: [apt, updates]
+
+  post_tasks:
+    - name: Detect reboot requirement
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: panel_reboot_required
+
+    - name: Reboot-required summary
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}:
+          {{ 'REBOOT REQUIRED (not rebooted by policy)'
+             if panel_reboot_required.stat.exists
+             else 'no reboot pending' }}

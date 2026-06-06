@@ -1,0 +1,34 @@
+# Runtime efêmero / artefatos — não versionar.
+.venv/
+collections/
+__pycache__/
+*.pyc
+*.retry
+*.log
+
+# Segredos do host (a senha do vault NUNCA entra no git).
+# O vault.yml em si É versionável (está criptografado).
+vault-pass
+.vault-pass
+
+# Web control panel runtime / secrets — never version.
+webpanel/.venv-web/
+webpanel/run_dirs/
+webpanel/data/
+panel.key
+panel.session
+panel.sqlite3
+panel.sqlite3-*
+
+# --- PUBLIC REPO: keep real, environment-specific config LOCAL ---
+# These contain real internal IPs / hostnames / topology. Commit the *.example
+# templates instead and copy them locally on each deployment.
+#   cp inventory/group_vars/all/main.example.yml inventory/group_vars/all/main.yml
+#   cp inventory/proxmox.example.yml inventory/proxmox.yml
+inventory/group_vars/all/main.yml
+inventory/proxmox.yml
+inventory/host_vars/
+# README.pt.md is kept as a LOCAL backup (real topology notes), not published.
+README.pt.md
+# NOTE: inventory/group_vars/all/vault.yml IS committed — it is encrypted with
+# ansible-vault and the vault password (vault-pass) is never versioned.

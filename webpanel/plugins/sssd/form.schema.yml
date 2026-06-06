@@ -1,0 +1,42 @@
+# UI form fields -> Ansible variables consumed by the authentik_sssd role.
+# Non-secret parameters live here; bind DN/password and the CA cert are secrets
+# routed to the Ansible vault (see secret_fields).
+fields:
+  - var: authentik_sssd_enabled
+    label: "Enable SSSD integration"
+    type: bool
+    default: false
+    help: "Keep OFF until bind credentials are configured."
+  - var: authentik_sssd_domain
+    label: "SSSD domain label"
+    type: string
+    default: "authentik"
+  - var: authentik_ldap_tls_mode
+    label: "TLS mode"
+    type: select
+    choices: ["ldaps", "start_tls", "false"]
+    default: "ldaps"
+  - var: authentik_ldap_hosts_entry
+    label: "/etc/hosts entry for the LDAP host"
+    type: string
+    default: "10.0.0.10 authentik-ldap.lan"
+    help: "Example placeholder — set this to your Authentik LDAP outpost IP/host."
+  - var: authentik_ldap_user_name_attr
+    label: "User name attribute"
+    type: string
+    default: "cn"
+  - var: authentik_default_shell
+    label: "Default shell"
+    type: string
+    default: "/bin/bash"
+  - var: authentik_fallback_homedir
+    label: "Fallback home directory"
+    type: string
+    default: "/home/%u"
+secret_fields:
+  - var: authentik_ldap_bind_password
+    label: "LDAP bind password"
+    type: password
+  - var: authentik_ldap_bind_dn
+    label: "LDAP bind DN"
+    type: password

@@ -1,0 +1,82 @@
+---
+# Integra autenticação com o LDAP outpost do Authentik via SSSD, mantendo
+# fallback automático para usuários locais (nsswitch: files ... sss).
+- name: Instalar pacotes SSSD/LDAP
+  ansible.builtin.apt:
+    name:
+      - sssd
+      - sssd-ldap
+      - libpam-sss
+      - libnss-sss
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Resolver o hostname do outpost LDAP via /etc/hosts (p/ TLS por nome)
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ authentik_ldap_hosts_entry }}"
+    regexp: "{{ authentik_ldap_hosts_entry.split()[1] | regex_escape }}"
+    state: present
+  when:
+    - authentik_ldap_hosts_entry is defined
+    - authentik_ldap_hosts_entry | length > 0
+
+- name: Instalar certificado CA do outpost (quando fornecido)
+  ansible.builtin.copy:
+    content: "{{ authentik_ldap_ca_cert }}"
+    dest: /etc/sssd/authentik-ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - authentik_ldap_ca_cert is defined
+    - authentik_ldap_ca_cert | length > 0
+  notify: reiniciar sssd
+
+- name: Gerar /etc/sssd/sssd.conf
+  ansible.builtin.template:
+    src: sssd.conf.j2
+    dest: /etc/sssd/sssd.conf
+    owner: root
+    group: root
+    mode: "0600" # SSSD recusa iniciar se for mais permissivo
+  notify: reiniciar sssd
+
+# --- NSS: garante fallback local (files vem ANTES de sss) ---
+- name: "nsswitch: passwd -> files systemd sss"
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^passwd:'
+    line: "passwd:         files systemd sss"
+  notify: reiniciar sssd
+
+- name: "nsswitch: group -> files systemd sss"
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^group:'
+    line: "group:          files systemd sss"
+  notify: reiniciar sssd
+
+- name: "nsswitch: shadow -> files sss"
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^shadow:'
+    line: "shadow:         files sss"
+  notify: reiniciar sssd
+
+# --- PAM: habilita sss e criação de home, preservando pam_unix (fallback) ---
+- name: Instalar perfil pam-config para mkhomedir
+  ansible.builtin.copy:
+    src: mkhomedir
+    dest: /usr/share/pam-configs/mkhomedir
+    owner: root
+    group: root
+    mode: "0644"
+  register: mkhomedir_profile
+
+- name: Habilitar perfis PAM sss e mkhomedir
+  ansible.builtin.command:
+    cmd: pam-auth-update --package --enable sss --enable mkhomedir
+  register: pam_update
+  changed_when: mkhomedir_profile.changed

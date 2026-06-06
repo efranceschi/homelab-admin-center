@@ -1,0 +1,10 @@
+id: sssd
+name: "Authentik SSSD"
+version: "1.0.0"
+description: "Integrates the Authentik LDAP outpost via SSSD with local fallback."
+ansible_role: authentik_sssd
+tags: [auth, sssd]
+enable_var: authentik_sssd_enabled
+supported_connections: [local, ssh, proxmox]
+order: 30
+supports_check_mode: true

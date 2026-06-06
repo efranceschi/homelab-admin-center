@@ -1,0 +1,8 @@
+# UI form fields -> Ansible variables consumed by the common_timezone role.
+fields:
+  - var: common_timezone
+    label: "Timezone"
+    type: string
+    default: "America/Sao_Paulo"
+    help: "IANA timezone name (e.g. America/Sao_Paulo, UTC, Europe/Lisbon)."
+secret_fields: []

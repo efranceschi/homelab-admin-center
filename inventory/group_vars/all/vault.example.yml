@@ -1,0 +1,25 @@
+---
+# ============================================================================
+# Example of the SECRET variables expected by the authentik_sssd role.
+# The real values live in `vault.yml`, encrypted with ansible-vault:
+#
+#   ansible-vault create  inventory/group_vars/all/vault.yml
+#   ansible-vault edit     inventory/group_vars/all/vault.yml
+#
+# The vault password is read from /etc/lxc-ansible/vault-pass (mode 0600) and
+# is NEVER committed. This example file (plaintext placeholders) is safe to
+# commit; do not put real secrets here.
+# ============================================================================
+
+# LDAP endpoint of the Authentik outpost (verified LDAPS).
+authentik_ldap_uri: "ldaps://authentik-ldap.lan:636"
+# Search base DN of the Authentik LDAP provider.
+authentik_ldap_base_dn: "dc=ldap,dc=example,dc=io"
+# Service account used to bind/search.
+authentik_ldap_bind_dn: "cn=ldap-bind,ou=users,dc=ldap,dc=example,dc=io"
+authentik_ldap_bind_password: "CHANGE_ME"
+# PEM CA/cert pinned for TLS verification (written to /etc/sssd/authentik-ca.crt).
+authentik_ldap_ca_cert: |
+  -----BEGIN CERTIFICATE-----
+  ... your outpost certificate here ...
+  -----END CERTIFICATE-----

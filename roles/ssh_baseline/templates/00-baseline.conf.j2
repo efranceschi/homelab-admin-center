@@ -1,0 +1,8 @@
+# Gerado por lxc-ansible (role ssh_baseline). NÃO editar manualmente.
+# Drop-in de baseline; sobrepõe o sshd_config padrão.
+PermitRootLogin {{ ssh_permit_root_login }}
+PasswordAuthentication {{ ssh_password_authentication }}
+PubkeyAuthentication {{ ssh_pubkey_authentication }}
+KbdInteractiveAuthentication {{ ssh_kbd_interactive }}
+UsePAM yes
+X11Forwarding no

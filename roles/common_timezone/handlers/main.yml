@@ -1,0 +1,5 @@
+---
+- name: reconfigurar tzdata
+  ansible.builtin.command:
+    cmd: dpkg-reconfigure -f noninteractive tzdata
+  changed_when: true

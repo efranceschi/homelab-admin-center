@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Run · {{ app_name }}{% endblock %}
+{% block content %}
+<h4 class="mb-3">Run Ansible</h4>
+
+{% if busy %}<div class="alert alert-warning">A job is currently running. Wait for it to finish.</div>{% endif %}
+
+<div class="row g-4"><div class="col-lg-7">
+  <div class="card"><div class="card-header">New run</div><div class="card-body">
+    <form method="post" action="/jobs/run">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Hosts</label>
+          <div class="border rounded p-2" style="max-height:220px;overflow:auto">
+            {% for s in servers %}
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="servers" value="{{ s.id }}" id="s{{ s.id }}">
+              <label class="form-check-label" for="s{{ s.id }}">
+                {{ s.name }} <span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></label>
+            </div>
+            {% else %}<span class="text-muted">No enabled hosts.</span>{% endfor %}
+          </div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Plugins</label>
+          <div class="border rounded p-2" style="max-height:220px;overflow:auto">
+            {% for p in plugins %}
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="plugins" value="{{ p.key }}" id="p{{ p.id }}">
+              <label class="form-check-label" for="p{{ p.id }}">{{ p.name }}
+                <span class="text-muted small">({{ p.ansible_tags }})</span></label>
+            </div>
+            {% else %}<span class="text-muted">No enabled plugins.</span>{% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary" name="mode" value="check" {% if busy %}disabled{% endif %}>
+          Dry run (--check --diff)</button>
+        {% if current_role == 'admin' %}
+        <button class="btn btn-danger" name="mode" value="apply" {% if busy %}disabled{% endif %}
+                onclick="return confirm('Apply changes to the selected hosts?')">Apply</button>
+        {% endif %}
+      </div>
+    </form>
+  </div></div>
+</div>
+
+<div class="col-lg-5">
+  <div class="card"><div class="card-header">History</div>
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>#</th><th>Mode</th><th>Tags</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for j in history %}
+      <tr>
+        <td><a href="/jobs/{{ j.id }}">{{ j.id }}</a></td>
+        <td>{{ j.mode }}</td>
+        <td class="small">{{ j.plugin_tags }}</td>
+        <td>
+          {% if j.status == 'success' %}<span class="badge bg-success">success</span>
+          {% elif j.status == 'failed' %}<span class="badge bg-danger">failed</span>
+          {% elif j.status == 'running' %}<span class="badge bg-primary">running</span>
+          {% elif j.status == 'cancelled' %}<span class="badge bg-secondary">cancelled</span>
+          {% else %}<span class="badge bg-light text-dark">{{ j.status }}</span>{% endif %}
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="4" class="text-muted">No history.</td></tr>{% endfor %}
+    </tbody>
+  </table></div></div>
+</div></div>
+{% endblock %}

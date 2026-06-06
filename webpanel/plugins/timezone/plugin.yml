@@ -1,0 +1,10 @@
+id: timezone
+name: "Timezone"
+version: "1.0.0"
+description: "Normalizes the system timezone across containers (idempotent, LXC-safe)."
+ansible_role: common_timezone
+tags: [timezone]
+enable_var: null
+supported_connections: [local, ssh, proxmox]
+order: 10
+supports_check_mode: true

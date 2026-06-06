@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ app_name }}{% endblock %}
+{% block content %}
+<h4 class="mb-3">Dashboard</h4>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body">
+    <div class="display-6">{{ counts.servers }}</div><div class="text-muted">Hosts</div>
+  </div></div></div>
+  <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body">
+    <div class="display-6">{{ counts.plugins_enabled }}</div><div class="text-muted">Plugins enabled</div>
+  </div></div></div>
+  <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body">
+    <div class="display-6 {% if counts.reboot %}text-warning{% endif %}">{{ counts.reboot }}</div>
+    <div class="text-muted">Reboot required</div>
+  </div></div></div>
+  <div class="col-6 col-md-3"><div class="card text-center"><div class="card-body">
+    <div class="display-6 {% if counts.failed %}text-danger{% endif %}">{{ counts.failed }}</div>
+    <div class="text-muted">Failed last run</div>
+  </div></div></div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card"><div class="card-header">Hosts</div>
+    <div class="table-responsive"><table class="table table-sm mb-0 align-middle">
+      <thead><tr><th>Name</th><th>Type</th><th>Last status</th><th>Reboot</th></tr></thead>
+      <tbody>
+      {% for s in servers %}
+        {% set st = states.get(s.id) %}
+        <tr>
+          <td>{{ s.name }}</td>
+          <td><span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></td>
+          <td>
+            {% if st and st.last_status == 'failed' %}<span class="badge bg-danger">failed</span>
+            {% elif st and st.last_status == 'changed' %}<span class="badge bg-warning text-dark">changed</span>
+            {% elif st and st.last_status == 'ok' %}<span class="badge bg-success">ok</span>
+            {% else %}<span class="badge bg-secondary">—</span>{% endif %}
+          </td>
+          <td>{% if st and st.reboot_required %}<span class="badge bg-warning text-dark">yes</span>{% else %}no{% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-muted">No hosts yet. <a href="/hosts">Add one</a>.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div></div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card"><div class="card-header">Recent jobs</div>
+    <div class="table-responsive"><table class="table table-sm mb-0 align-middle">
+      <thead><tr><th>#</th><th>Mode</th><th>Target</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for j in recent %}
+        <tr>
+          <td><a href="/jobs/{{ j.id }}">{{ j.id }}</a></td>
+          <td>{{ j.mode }}</td>
+          <td class="text-truncate" style="max-width:160px">{{ j.target_ref }}</td>
+          <td>
+            {% if j.status == 'success' %}<span class="badge bg-success">success</span>
+            {% elif j.status == 'failed' %}<span class="badge bg-danger">failed</span>
+            {% elif j.status == 'running' %}<span class="badge bg-primary">running</span>
+            {% elif j.status == 'cancelled' %}<span class="badge bg-secondary">cancelled</span>
+            {% else %}<span class="badge bg-light text-dark">{{ j.status }}</span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-muted">No jobs run yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div></div>
+  </div>
+</div>
+{% endblock %}

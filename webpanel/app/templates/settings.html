@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ app_name }}{% endblock %}
+{% block content %}
+<h4 class="mb-3">Settings</h4>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card"><div class="card-header">Users</div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Username</th><th>Role</th><th>Last login</th><th></th></tr></thead>
+      <tbody>
+      {% for u in users %}
+        <tr>
+          <td>{{ u.username }}</td>
+          <td><span class="badge {{ 'bg-primary' if u.role == 'admin' else 'bg-secondary' }}">{{ u.role }}</span></td>
+          <td class="small">{{ u.last_login_at.strftime('%Y-%m-%d %H:%M') if u.last_login_at else '—' }}</td>
+          <td>
+            {% if current_role == 'admin' and u.username != current_username %}
+            <form method="post" action="/settings/users/{{ u.id }}/delete" class="d-inline"
+                  onsubmit="return confirm('Delete user {{ u.username }}?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn btn-sm btn-outline-danger">✕</button></form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div></div>
+  </div>
+
+  <div class="col-lg-5">
+    {% if current_role == 'admin' %}
+    <div class="card mb-4"><div class="card-header">Add user</div><div class="card-body">
+      <form method="post" action="/settings/users">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="mb-2"><label class="form-label">Username</label>
+          <input class="form-control form-control-sm" name="username" required></div>
+        <div class="mb-2"><label class="form-label">Password (min 8)</label>
+          <input class="form-control form-control-sm" type="password" name="password" minlength="8" required></div>
+        <div class="mb-2"><label class="form-label">Role</label>
+          <select class="form-select form-select-sm" name="role">
+            <option value="viewer">viewer (read-only + dry-run)</option>
+            <option value="admin">admin (full access)</option>
+          </select></div>
+        <button class="btn btn-primary btn-sm w-100">Add user</button>
+      </form>
+    </div></div>
+
+    <div class="card"><div class="card-header">Plugins</div><div class="card-body">
+      <p class="small text-muted">{{ plugins|length }} plugin(s) discovered in
+        <code>webpanel/plugins/</code>.</p>
+      <form method="post" action="/settings/plugins/reload">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-outline-secondary btn-sm w-100">Reload plugins from disk</button>
+      </form>
+    </div></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

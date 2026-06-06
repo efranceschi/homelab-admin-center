@@ -1,0 +1,12 @@
+# Web control panel dependencies — installed in webpanel/.venv-web by run-panel.sh.
+# Kept SEPARATE from the project's requirements.txt so the Ansible cron venv is
+# never disturbed. ansible-core is reused from the project's own .venv.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+jinja2>=3.1
+python-multipart>=0.0.9
+itsdangerous>=2.1
+sqlalchemy>=2.0
+argon2-cffi>=23.1
+cryptography>=42.0
+pyyaml>=6.0

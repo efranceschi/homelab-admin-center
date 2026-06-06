@@ -1,0 +1,45 @@
+---
+# ============================================================================
+# Example non-secret configuration applied to all containers.
+# Copy this file to `main.yml` and adjust for your environment.
+# Secrets (e.g. the Authentik LDAP bind) live in vault.yml (ansible-vault).
+# ============================================================================
+
+# ---- timezone ----
+common_timezone: "America/Sao_Paulo"
+
+# ---- ssh_baseline ----
+# Host public key distributed to the containers' root (future SSH path).
+ssh_host_pubkey_path: "/root/.ssh/id_rsa.pub"
+ssh_distribute_host_key: true
+ssh_permit_root_login: "prohibit-password"
+ssh_password_authentication: "no"
+ssh_pubkey_authentication: "yes"
+ssh_kbd_interactive: "yes"      # required for PAM (Authentik) over SSH
+
+# ---- apt_maintenance ----
+apt_full_upgrade: true
+apt_autoremove: true
+apt_autoclean: true
+apt_auto_reboot: false          # policy: NEVER reboot automatically
+
+# ---- authentik_sssd ----
+# Toggle the SSSD integration. Keep FALSE until the real bind credentials are
+# filled in vault.yml (`ansible-vault edit group_vars/all/vault.yml`).
+authentik_sssd_enabled: false
+authentik_sssd_domain: "authentik"
+authentik_ldap_user_object_class: "user"
+authentik_ldap_group_object_class: "group"
+authentik_ldap_user_name_attr: "cn"
+authentik_ldap_user_uid_attr: "uidNumber"
+authentik_ldap_user_gid_attr: "gidNumber"
+authentik_ldap_user_home_attr: "homeDirectory"
+authentik_ldap_user_shell_attr: "loginShell"
+# TLS: "false" (plain ldap), "start_tls" or "ldaps" (ldaps:// uri).
+authentik_ldap_tls_mode: "ldaps"
+# The outpost cert SAN must match this hostname; containers resolve it to the
+# outpost IP via /etc/hosts (TLS verified by hostname + pinned cert).
+authentik_ldap_hosts_entry: "10.0.0.10 authentik-ldap.lan"
+# Default shell/home (Authentik does not populate loginShell).
+authentik_default_shell: "/bin/bash"
+authentik_fallback_homedir: "/home/%u"

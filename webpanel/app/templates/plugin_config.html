@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Configure {{ lp.name }} · {{ app_name }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/plugins">Plugins</a></li>
+  <li class="breadcrumb-item active">{{ lp.name }}</li>
+</ol></nav>
+
+<div class="row"><div class="col-lg-7">
+  <div class="card"><div class="card-header">Global configuration — {{ lp.name }}</div>
+  <div class="card-body">
+    <p class="text-muted small">These values are applied to all targeted hosts via Ansible
+      extra-vars. They never modify the project's <code>group_vars</code> files.</p>
+    <form method="post" action="/plugins/{{ lp.id }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% for f in lp.fields %}
+      <div class="mb-3">
+        <label class="form-label">{{ f.label }}
+          {% if f.secret %}<span class="badge bg-warning text-dark">secret</span>{% endif %}</label>
+        {% if f.type == 'bool' %}
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="{{ f.var }}"
+                   {% if values.get(f.var) %}checked{% endif %}>
+          </div>
+        {% elif f.type == 'yesno' %}
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="{{ f.var }}"
+                   {% if values.get(f.var) in ['yes', true, 'true'] %}checked{% endif %}>
+            <span class="form-check-label small text-muted">on = "yes"</span>
+          </div>
+        {% elif f.type == 'select' %}
+          <select class="form-select" name="{{ f.var }}">
+            {% for c in f.choices %}
+              <option value="{{ c }}" {% if values.get(f.var)|string == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        {% elif f.secret %}
+          <input class="form-control" type="password" name="{{ f.var }}"
+                 placeholder="{{ 'stored — leave blank to keep' if f.var in secret_set else 'not set' }}">
+        {% else %}
+          <input class="form-control" name="{{ f.var }}" value="{{ values.get(f.var, '') }}">
+        {% endif %}
+        {% if f.help %}<div class="form-text">{{ f.help }}</div>{% endif %}
+        <div class="form-text"><code>{{ f.var }}</code></div>
+      </div>
+      {% endfor %}
+      {% if current_role == 'admin' %}
+      <button class="btn btn-primary">Save configuration</button>
+      {% else %}<div class="alert alert-info py-2 mb-0">Viewers cannot edit configuration.</div>{% endif %}
+    </form>
+  </div></div>
+</div>
+<div class="col-lg-5">
+  <div class="card"><div class="card-header">Details</div><div class="card-body small">
+    <dl class="row mb-0">
+      <dt class="col-5">Role</dt><dd class="col-7"><code>{{ lp.ansible_role }}</code></dd>
+      <dt class="col-5">Tags</dt><dd class="col-7">{{ lp.tags_csv }}</dd>
+      <dt class="col-5">Enable var</dt><dd class="col-7">{{ lp.enable_var or '—' }}</dd>
+      <dt class="col-5">Check mode</dt><dd class="col-7">{{ 'yes' if lp.supports_check_mode else 'no' }}</dd>
+      <dt class="col-5">Order</dt><dd class="col-7">{{ lp.order }}</dd>
+    </dl>
+  </div></div>
+</div></div>
+{% endblock %}

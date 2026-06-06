@@ -1,0 +1,10 @@
+id: apt
+name: "APT Maintenance"
+version: "1.0.0"
+description: "Package update + full-upgrade + autoremove/autoclean. Never reboots."
+ansible_role: apt_maintenance
+tags: [apt, updates]
+enable_var: null
+supported_connections: [local, ssh, proxmox]
+order: 40
+supports_check_mode: true

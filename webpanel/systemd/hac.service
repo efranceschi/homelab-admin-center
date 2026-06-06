@@ -1,0 +1,26 @@
+[Unit]
+Description=HomeLab Admin Center (hac) — lxc-ansible web control panel
+Documentation=https://github.com/efranceschi/homelab-admin-center
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Must run as root on the Proxmox node: the panel shells out to `pct` and reads
+# the Ansible vault password file (/etc/lxc-ansible/vault-pass, mode 0600).
+User=root
+WorkingDirectory=/opt/lxc-ansible/webpanel
+# Bind address/port (override with `systemctl edit hac` if needed).
+# Binds to all interfaces by default; restrict via firewall or a reverse proxy.
+Environment=PANEL_HOST=0.0.0.0
+Environment=PANEL_PORT=8910
+# run-panel.sh creates/updates the dedicated venv then exec's uvicorn (1 worker).
+ExecStart=/opt/lxc-ansible/webpanel/run-panel.sh
+Restart=on-failure
+RestartSec=5
+# Persistent state lives outside the repo.
+StateDirectory=lxc-ansible
+ReadWritePaths=/var/lib/lxc-ansible /run /var/log/lxc-ansible
+
+[Install]
+WantedBy=multi-user.target

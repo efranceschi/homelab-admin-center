@@ -1,0 +1,20 @@
+# UI form fields -> Ansible variables consumed by the apt_maintenance role.
+fields:
+  - var: apt_full_upgrade
+    label: "Full upgrade (dist-upgrade)"
+    type: bool
+    default: true
+  - var: apt_autoremove
+    label: "Autoremove unused packages"
+    type: bool
+    default: true
+  - var: apt_autoclean
+    label: "Autoclean package cache"
+    type: bool
+    default: true
+  - var: apt_auto_reboot
+    label: "Allow automatic reboot"
+    type: bool
+    default: false
+    help: "Project policy keeps this OFF; the panel only reports reboot-required."
+secret_fields: []

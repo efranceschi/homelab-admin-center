@@ -1,0 +1,7 @@
+---
+# Collections instaladas localmente em ./collections por run.sh (ansible-galaxy).
+collections:
+  - name: community.general
+    version: ">=8.0.0"
+  - name: ansible.posix
+    version: ">=1.5.0"

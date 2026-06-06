@@ -1,0 +1,10 @@
+id: ssh
+name: "SSH Baseline"
+version: "1.0.0"
+description: "Hardened sshd drop-in configuration and host public-key distribution."
+ansible_role: ssh_baseline
+tags: [ssh]
+enable_var: null
+supported_connections: [local, ssh, proxmox]
+order: 20
+supports_check_mode: true

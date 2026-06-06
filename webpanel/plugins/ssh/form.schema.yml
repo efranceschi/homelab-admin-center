@@ -1,0 +1,29 @@
+# UI form fields -> Ansible variables consumed by the ssh_baseline role.
+fields:
+  - var: ssh_permit_root_login
+    label: "Permit root login"
+    type: select
+    choices: ["yes", "no", "prohibit-password"]
+    default: "prohibit-password"
+  - var: ssh_password_authentication
+    label: "Password authentication"
+    type: yesno
+    default: "no"
+  - var: ssh_pubkey_authentication
+    label: "Public key authentication"
+    type: yesno
+    default: "yes"
+  - var: ssh_kbd_interactive
+    label: "Keyboard-interactive (PAM)"
+    type: yesno
+    default: "yes"
+    help: "Required for Authentik/SSSD logins over SSH."
+  - var: ssh_distribute_host_key
+    label: "Distribute host public key"
+    type: bool
+    default: true
+  - var: ssh_host_pubkey_path
+    label: "Host public key path"
+    type: string
+    default: "/root/.ssh/id_rsa.pub"
+secret_fields: []

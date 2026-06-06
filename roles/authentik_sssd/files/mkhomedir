@@ -1,0 +1,6 @@
+Name: Criar diretório home no primeiro login
+Default: yes
+Priority: 0
+Session-Type: Additional
+Session:
+	required			pam_mkhomedir.so umask=0077 skel=/etc/skel
