@@ -1,0 +1,20 @@
+{# Fragment for the navbar Jobs dropdown — htmx-loaded from /jobs/recent. #}
+{% from "_macros.html" import mode_badge %}
+{% for j in jobs %}
+<a class="dropdown-item d-flex justify-content-between align-items-start py-1" href="/jobs/{{ j.id }}">
+  <span class="text-truncate me-2" style="max-width:230px">
+    <span class="text-muted">#{{ j.id }}</span>
+    <span class="ms-1">{{ j.target_ref or '—' }}</span>
+    <span class="d-block text-muted" style="font-size:.75rem">
+      {{ mode_badge(j.mode) }} · {{ j.created_at.strftime('%m-%d %H:%M') }} UTC
+    </span>
+  </span>
+  {% if j.status == 'success' %}<span class="badge bg-success">success</span>
+  {% elif j.status == 'failed' %}<span class="badge bg-danger">failed</span>
+  {% elif j.status == 'running' %}<span class="badge bg-primary">running</span>
+  {% elif j.status == 'cancelled' %}<span class="badge bg-secondary">cancelled</span>
+  {% else %}<span class="badge bg-light text-dark">{{ j.status }}</span>{% endif %}
+</a>
+{% else %}
+<div class="px-3 py-2 text-muted small">No jobs yet.</div>
+{% endfor %}

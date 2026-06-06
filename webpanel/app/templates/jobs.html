@@ -1,72 +1,100 @@
 {% extends "base.html" %}
+{% from "_macros.html" import mode_badge %}
 {% block title %}Run · {{ app_name }}{% endblock %}
 {% block content %}
-<h4 class="mb-3">Run Ansible</h4>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Run Ansible</h4>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#run-modal" {% if busy %}disabled{% endif %}>
+    + New run</button>
+</div>
 
 {% if busy %}<div class="alert alert-warning">A job is currently running. Wait for it to finish.</div>{% endif %}
 
-<div class="row g-4"><div class="col-lg-7">
-  <div class="card"><div class="card-header">New run</div><div class="card-body">
-    <form method="post" action="/jobs/run">
+<div class="card"><div class="card-header">History</div>
+<div class="table-responsive"><table class="table table-sm align-middle mb-0">
+  <thead><tr><th>#</th><th>Mode</th><th>Tags</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+  <tbody>
+  {% for j in history %}
+    <tr>
+      <td><a href="/jobs/{{ j.id }}">{{ j.id }}</a></td>
+      <td>{{ mode_badge(j.mode) }}</td>
+      <td class="small">{{ j.plugin_tags }}</td>
+      <td>
+        {% if j.status == 'success' %}<span class="badge bg-success">success</span>
+        {% elif j.status == 'failed' %}<span class="badge bg-danger">failed</span>
+        {% elif j.status == 'running' %}<span class="badge bg-primary">running</span>
+        {% elif j.status == 'cancelled' %}<span class="badge bg-secondary">cancelled</span>
+        {% else %}<span class="badge bg-light text-dark">{{ j.status }}</span>{% endif %}
+      </td>
+      <td class="text-end">
+        {% if j.status in ['failed', 'cancelled'] and (j.mode != 'apply' or current_role == 'admin') %}
+        <button type="button" class="btn btn-outline-primary btn-sm py-0"
+                data-action="/jobs/{{ j.id }}/retry" {% if busy %}disabled{% endif %}
+                data-title="Retry job" data-ok="Retry" data-ok-class="btn-primary"
+                data-confirm="Re-run job #{{ j.id }} ({{ j.mode }}) on {{ j.target_ref }}?">Retry</button>
+        {% elif j.status == 'success' and (j.mode != 'apply' or current_role == 'admin') %}
+        <button type="button" class="btn btn-outline-primary btn-sm py-0"
+                data-action="/jobs/{{ j.id }}/retry" {% if busy %}disabled{% endif %}
+                data-title="Executar Novamente" data-ok="Executar Novamente" data-ok-class="btn-primary"
+                data-confirm="Executar novamente o job #{{ j.id }} ({{ j.mode }}) em {{ j.target_ref }}?">Executar Novamente</button>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}<tr><td colspan="5" class="text-muted">No history.</td></tr>{% endfor %}
+  </tbody>
+</table></div></div>
+
+{# ---- New run modal ------------------------------------------------------ #}
+<div class="modal fade" id="run-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <form class="modal-content" method="post" action="/jobs/run">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <div class="row">
-        <div class="col-md-6 mb-3">
-          <label class="form-label">Hosts</label>
-          <div class="border rounded p-2" style="max-height:220px;overflow:auto">
-            {% for s in servers %}
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="servers" value="{{ s.id }}" id="s{{ s.id }}">
-              <label class="form-check-label" for="s{{ s.id }}">
-                {{ s.name }} <span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></label>
-            </div>
-            {% else %}<span class="text-muted">No enabled hosts.</span>{% endfor %}
-          </div>
-        </div>
-        <div class="col-md-6 mb-3">
-          <label class="form-label">Plugins</label>
-          <div class="border rounded p-2" style="max-height:220px;overflow:auto">
-            {% for p in plugins %}
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="plugins" value="{{ p.key }}" id="p{{ p.id }}">
-              <label class="form-check-label" for="p{{ p.id }}">{{ p.name }}
-                <span class="text-muted small">({{ p.ansible_tags }})</span></label>
-            </div>
-            {% else %}<span class="text-muted">No enabled plugins.</span>{% endfor %}
-          </div>
-        </div>
+      <div class="modal-header">
+        <h5 class="modal-title">New run</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="d-flex gap-2">
-        <button class="btn btn-outline-secondary" name="mode" value="check" {% if busy %}disabled{% endif %}>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Hosts</label>
+            <div class="border rounded p-2" style="max-height:240px;overflow:auto">
+              {% for s in servers %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="servers" value="{{ s.id }}" id="s{{ s.id }}">
+                <label class="form-check-label" for="s{{ s.id }}">
+                  {{ s.name }} <span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></label>
+              </div>
+              {% else %}<span class="text-muted">No enabled hosts.</span>{% endfor %}
+            </div>
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Plugins</label>
+            <div class="border rounded p-2" style="max-height:240px;overflow:auto">
+              {% for p in plugins %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="plugins" value="{{ p.key }}" id="p{{ p.id }}">
+                <label class="form-check-label" for="p{{ p.id }}">{{ p.name }}
+                  <span class="text-muted small">({{ p.ansible_tags }})</span></label>
+              </div>
+              {% else %}<span class="text-muted">No enabled plugins.</span>{% endfor %}
+            </div>
+          </div>
+        </div>
+        <p class="text-muted small mb-0">Selecting no hosts or no plugins targets all enabled ones.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary me-auto" data-bs-dismiss="modal">Cancel</button>
+        {# Apply is the primary action; dry run kept as a secondary option. #}
+        <button class="btn btn-outline-secondary btn-sm" name="mode" value="check" {% if busy %}disabled{% endif %}>
           Dry run (--check --diff)</button>
         {% if current_role == 'admin' %}
         <button class="btn btn-danger" name="mode" value="apply" {% if busy %}disabled{% endif %}
                 onclick="return confirm('Apply changes to the selected hosts?')">Apply</button>
+        {% else %}
+        <span class="text-muted small align-self-center">Apply requires admin</span>
         {% endif %}
       </div>
     </form>
-  </div></div>
+  </div>
 </div>
-
-<div class="col-lg-5">
-  <div class="card"><div class="card-header">History</div>
-  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-    <thead><tr><th>#</th><th>Mode</th><th>Tags</th><th>Status</th></tr></thead>
-    <tbody>
-    {% for j in history %}
-      <tr>
-        <td><a href="/jobs/{{ j.id }}">{{ j.id }}</a></td>
-        <td>{{ j.mode }}</td>
-        <td class="small">{{ j.plugin_tags }}</td>
-        <td>
-          {% if j.status == 'success' %}<span class="badge bg-success">success</span>
-          {% elif j.status == 'failed' %}<span class="badge bg-danger">failed</span>
-          {% elif j.status == 'running' %}<span class="badge bg-primary">running</span>
-          {% elif j.status == 'cancelled' %}<span class="badge bg-secondary">cancelled</span>
-          {% else %}<span class="badge bg-light text-dark">{{ j.status }}</span>{% endif %}
-        </td>
-      </tr>
-    {% else %}<tr><td colspan="4" class="text-muted">No history.</td></tr>{% endfor %}
-    </tbody>
-  </table></div></div>
-</div></div>
 {% endblock %}

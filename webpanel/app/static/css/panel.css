@@ -31,3 +31,44 @@ body { background: #f6f7f9; }
 .plugin-card:hover { box-shadow: 0 .25rem .75rem rgba(0,0,0,.08); }
 
 .setup-wrap, .login-wrap { max-width: 420px; margin: 8vh auto; }
+
+/* ---- Dashboard visuals ---- */
+.kpi {
+  background:#fff; border-radius:.6rem; padding:1rem 1.1rem;
+  border-left:4px solid #adb5bd; box-shadow:0 .125rem .4rem rgba(0,0,0,.05);
+  height:100%;
+}
+.kpi-num { font-size:2rem; font-weight:700; line-height:1; }
+.kpi-cap { color:#6c757d; font-size:.8rem; text-transform:uppercase; letter-spacing:.03em; margin-top:.25rem; }
+.kpi-primary { border-left-color:#0d6efd; }
+.kpi-success { border-left-color:#198754; } .kpi-success .kpi-num { color:#198754; }
+.kpi-warning { border-left-color:#ffc107; } .kpi-warning .kpi-num { color:#cc9a00; }
+.kpi-danger  { border-left-color:#dc3545; } .kpi-danger  .kpi-num { color:#dc3545; }
+.kpi-info    { border-left-color:#0dcaf0; }
+.kpi-muted   { border-left-color:#adb5bd; } .kpi-muted   .kpi-num { color:#6c757d; }
+
+.donut { width:170px; height:170px; }
+.donut-num { font-size:1.9rem; font-weight:700; fill:#212529; }
+.donut-cap { font-size:.55rem; fill:#6c757d; text-transform:uppercase; letter-spacing:.05em; }
+
+.dot { display:inline-block; width:.7rem; height:.7rem; border-radius:50%; margin-right:.35rem; vertical-align:middle; }
+
+.chip { font-weight:500; padding:.45em .7em; }
+
+.job-chip {
+  display:inline-flex; flex-direction:column; align-items:center;
+  min-width:54px; padding:.35rem .5rem; border-radius:.45rem;
+  text-decoration:none; color:#fff; line-height:1.1;
+}
+.job-chip .jc-id { font-weight:700; font-size:.8rem; }
+.job-chip .jc-mode {
+  font-size:.6rem; line-height:1; text-transform:uppercase; letter-spacing:.02em;
+  margin-top:.15rem; padding:.05rem .3rem; border-radius:.3rem;
+}
+/* Live apply: solid, high-contrast pill. Dry-run: outlined/quiet. */
+.job-chip .jc-mode-apply { background:#fff; color:#dc3545; font-weight:700; }
+.job-chip .jc-mode-check { border:1px solid rgba(255,255,255,.7); opacity:.9; }
+.jc-success { background:#198754; }
+.jc-failed  { background:#dc3545; }
+.jc-running { background:#0d6efd; }
+.jc-other   { background:#6c757d; }

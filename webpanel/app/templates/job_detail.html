@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import mode_badge %}
 {% block title %}Job #{{ job.id }} · {{ app_name }}{% endblock %}
 {% block content %}
 <nav aria-label="breadcrumb"><ol class="breadcrumb">
@@ -9,25 +10,38 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <h5 class="mb-1">Job #{{ job.id }}
+      {{ mode_badge(job.mode) }}
       <span id="status-badge" class="badge
         {% if job.status == 'success' %}bg-success{% elif job.status == 'failed' %}bg-danger
         {% elif job.status == 'running' %}bg-primary{% elif job.status == 'cancelled' %}bg-secondary
         {% else %}bg-light text-dark{% endif %}">{{ job.status }}</span>
     </h5>
     <div class="text-muted small">
-      mode <b>{{ job.mode }}</b> · tags <code>{{ job.plugin_tags }}</code> · target {{ job.target_ref }}
+      tags <code>{{ job.plugin_tags }}</code> · target {{ job.target_ref }}
       {% if job.return_code is not none %} · rc {{ job.return_code }}{% endif %}
     </div>
   </div>
   {% if live and current_role == 'admin' %}
-  <form method="post" action="/jobs/{{ job.id }}/cancel">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="btn btn-outline-danger btn-sm">Cancel</button>
-  </form>
+  <button type="button" class="btn btn-outline-danger btn-sm"
+          data-action="/jobs/{{ job.id }}/cancel"
+          data-title="Cancel job" data-ok="Cancel job"
+          data-confirm="Stop the running job #{{ job.id }}?">Cancel</button>
+  {% elif not live and job.status in ['failed', 'cancelled']
+          and (job.mode != 'apply' or current_role == 'admin') %}
+  <button type="button" class="btn btn-outline-primary btn-sm"
+          data-action="/jobs/{{ job.id }}/retry"
+          data-title="Retry job" data-ok="Retry" data-ok-class="btn-primary"
+          data-confirm="Re-run job #{{ job.id }} ({{ job.mode }}) on {{ job.target_ref }}?">Retry</button>
+  {% elif not live and job.status == 'success'
+          and (job.mode != 'apply' or current_role == 'admin') %}
+  <button type="button" class="btn btn-outline-primary btn-sm"
+          data-action="/jobs/{{ job.id }}/retry"
+          data-title="Executar Novamente" data-ok="Executar Novamente" data-ok-class="btn-primary"
+          data-confirm="Executar novamente o job #{{ job.id }} ({{ job.mode }}) em {{ job.target_ref }}?">Executar Novamente</button>
   {% endif %}
 </div>
 
-<pre class="log-view" id="log">{{ log_text }}</pre>
+<pre class="log-view" id="log">{{ log_html|safe }}</pre>
 
 {% if live %}
 <script>
@@ -38,7 +52,8 @@
   function atBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 40; }
   es.onmessage = function (e) {
     const stick = atBottom();
-    log.appendChild(document.createTextNode(e.data + "\n"));
+    // Server sends HTML-escaped lines with ANSI colours already as spans.
+    log.insertAdjacentHTML("beforeend", e.data + "\n");
     if (stick) log.scrollTop = log.scrollHeight;
   };
   es.addEventListener('done', function () {

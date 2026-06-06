@@ -1,0 +1,11 @@
+{# Reusable UI macros. #}
+
+{# Job run-mode badge: makes it unmistakable whether a job is a dry run
+   (--check, no changes) or a live apply (changes written to the host). #}
+{% macro mode_badge(mode) %}
+  {%- if mode == 'apply' -%}
+    <span class="badge bg-danger" title="Live run — changes are applied to the host">⏵ Apply</span>
+  {%- else -%}
+    <span class="badge bg-info text-dark" title="Dry run (--check --diff) — no changes are made">◌ Dry-run</span>
+  {%- endif -%}
+{% endmacro %}
