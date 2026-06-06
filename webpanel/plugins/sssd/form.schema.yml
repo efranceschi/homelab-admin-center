@@ -16,11 +16,21 @@ fields:
     type: select
     choices: ["ldaps", "start_tls", "false"]
     default: "ldaps"
+  - var: authentik_ldap_uri
+    label: "LDAP URI"
+    type: string
+    default: "ldaps://authentik-ldap.lan:636"
+    help: "Authentik LDAP outpost endpoint. Use ldaps:// when TLS mode is ldaps."
+  - var: authentik_ldap_base_dn
+    label: "Base DN (search base)"
+    type: string
+    default: "dc=ldap,dc=goauthentik,dc=io"
+    help: "Outpost base DN, e.g. dc=ldap,dc=goauthentik,dc=io."
   - var: authentik_ldap_hosts_entry
     label: "/etc/hosts entry for the LDAP host"
     type: string
-    default: "10.0.0.10 authentik-ldap.lan"
-    help: "Example placeholder — set this to your Authentik LDAP outpost IP/host."
+    default: "192.168.68.105 authentik-ldap.lan"
+    help: "Maps the cert SAN hostname to the outpost IP for TLS verification."
   - var: authentik_ldap_user_name_attr
     label: "User name attribute"
     type: string
@@ -40,3 +50,6 @@ secret_fields:
   - var: authentik_ldap_bind_dn
     label: "LDAP bind DN"
     type: password
+  - var: authentik_ldap_ca_cert
+    label: "Outpost CA certificate (PEM)"
+    type: textarea

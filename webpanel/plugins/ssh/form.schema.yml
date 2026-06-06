@@ -22,8 +22,8 @@ fields:
     label: "Distribute host public key"
     type: bool
     default: true
-  - var: ssh_host_pubkey_path
-    label: "Host public key path"
-    type: string
-    default: "/root/.ssh/id_rsa.pub"
+  - var: ssh_host_pubkeys
+    label: "Host public keys"
+    type: textarea
+    help: "One public key per line; all are added to root's authorized_keys (e.g. ssh-ed25519 AAAA... host)."
 secret_fields: []

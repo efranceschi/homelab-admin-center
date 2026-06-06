@@ -25,10 +25,24 @@
     mode: "0644"
   notify: ssh config alterada
 
-- name: Distribuir chave pública do host para root
+# Aceita lista YAML (group_vars) ou texto multilinha (painel: 1 chave por linha).
+- name: Normalizar lista de chaves públicas do host
+  ansible.builtin.set_fact:
+    ssh_host_pubkeys_list: >-
+      {{
+        (ssh_host_pubkeys
+          if (ssh_host_pubkeys is sequence and ssh_host_pubkeys is not string)
+          else (ssh_host_pubkeys | default('')).splitlines())
+        | map('trim') | reject('equalto', '') | list
+      }}
+
+- name: Distribuir chaves públicas do host para root
   ansible.posix.authorized_key:
     user: root
-    key: "{{ lookup('ansible.builtin.file', ssh_host_pubkey_path) }}"
+    key: "{{ item }}"
     state: present
     exclusive: false
-  when: ssh_distribute_host_key | bool
+  loop: "{{ ssh_host_pubkeys_list }}"
+  when:
+    - ssh_distribute_host_key | bool
+    - ssh_host_pubkeys_list | length > 0

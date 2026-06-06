@@ -34,6 +34,10 @@
               <option value="{{ c }}" {% if values.get(f.var)|string == c %}selected{% endif %}>{{ c }}</option>
             {% endfor %}
           </select>
+        {% elif f.type == 'textarea' %}
+          <textarea class="form-control" name="{{ f.var }}"
+                    rows="{{ 8 if f.secret else 4 }}"
+                    {% if f.secret %}placeholder="{{ 'stored — leave blank to keep' if f.var in secret_set else 'not set' }}"{% endif %}>{% if not f.secret %}{{ values.get(f.var, '') }}{% endif %}</textarea>
         {% elif f.secret %}
           <input class="form-control" type="password" name="{{ f.var }}"
                  placeholder="{{ 'stored — leave blank to keep' if f.var in secret_set else 'not set' }}">
