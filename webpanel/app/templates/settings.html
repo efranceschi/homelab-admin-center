@@ -4,8 +4,8 @@
 <h4 class="mb-3">Settings</h4>
 
 <div class="row g-4">
-  <div class="col-lg-7">
-    <div class="card"><div class="card-header">Users</div>
+  <div class="col-lg-7" id="users">
+    <div class="card"><div class="card-header">Users &amp; roles</div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
       <thead><tr><th>Username</th><th>Role</th><th>Last login</th><th></th></tr></thead>
       <tbody>
@@ -46,7 +46,7 @@
       </form>
     </div></div>
 
-    <div class="card mb-4"><div class="card-header">Plugins</div><div class="card-body">
+    <div class="card mb-4" id="plugins"><div class="card-header">Plugins</div><div class="card-body">
       <p class="small text-muted">{{ plugins|length }} plugin(s) discovered in
         <code>webpanel/plugins/</code>.</p>
       <form method="post" action="/settings/plugins/reload">
@@ -55,7 +55,8 @@
       </form>
     </div></div>
 
-    <div class="card"><div class="card-header">System</div><div class="card-body">
+    <div class="card" id="system"><div class="card-header">System</div><div class="card-body">
+      <span id="scheduler"></span>
       <p class="small text-muted mb-2">
         Scheduler:
         {% if scheduler.running %}<span class="badge bg-success">running (pid {{ scheduler.pid }})</span>

@@ -22,11 +22,41 @@
     <div class="collapse navbar-collapse" id="nav">
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link" href="/dashboard">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" href="/hosts">Hosts</a></li>
-        <li class="nav-item"><a class="nav-link" href="/plugins">Plugins</a></li>
-        <li class="nav-item"><a class="nav-link" href="/jobs">Run</a></li>
-        <li class="nav-item"><a class="nav-link" href="/schedules">Schedule</a></li>
-        <li class="nav-item"><a class="nav-link" href="/settings">Settings</a></li>
+
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Infrastructure</a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">Hosts</h6></li>
+            <li><a class="dropdown-item" href="/hosts">Managed hosts</a></li>
+            <li><a class="dropdown-item" href="/hosts#credentials">Credentials</a></li>
+          </ul>
+        </li>
+
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Automation</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="/plugins">Plugins</a></li>
+            <li><a class="dropdown-item" href="/jobs">Run now</a></li>
+            <li><a class="dropdown-item" href="/schedules">Schedules</a></li>
+          </ul>
+        </li>
+
+        {% if current_role == 'admin' %}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Administration</a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">Access control</h6></li>
+            <li><a class="dropdown-item" href="/settings#users">Users &amp; roles</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">System</h6></li>
+            <li><a class="dropdown-item" href="/settings#system">Update &amp; restart</a></li>
+            <li><a class="dropdown-item" href="/settings#scheduler">Scheduler</a></li>
+            <li><a class="dropdown-item" href="/settings#plugins">Reload plugins</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/settings">All settings</a></li>
+          </ul>
+        </li>
+        {% endif %}
       </ul>
       <span class="navbar-text me-3">{{ current_username }}
         <span class="badge bg-info text-dark">{{ current_role }}</span></span>
