@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Schedule · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Schedules</h4>
+  <div>
+    <span class="me-2">Scheduler:
+      {% if scheduler.running %}<span class="badge bg-success">running (pid {{ scheduler.pid }})</span>
+      {% else %}<span class="badge bg-secondary">stopped</span>{% endif %}</span>
+    {% if current_role == 'admin' %}
+    {% for act in ['start', 'stop', 'restart'] %}
+    <form method="post" action="/schedules/scheduler/{{ act }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-sm btn-outline-secondary">{{ act }}</button>
+    </form>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+<p class="text-muted">Recurring runs are executed by the application's own scheduler
+  (a separate child process) — not cron.</p>
+
+<div class="row g-4"><div class="col-lg-7">
+  <div class="card"><div class="card-header">Defined schedules</div>
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Name</th><th>When</th><th>Mode</th><th>Next run</th><th>Enabled</th><th></th></tr></thead>
+    <tbody>
+    {% for s in schedules %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td>{% if s.kind == 'interval' %}every {{ s.interval_minutes }} min
+            {% else %}daily {{ s.daily_time }}{% endif %}</td>
+        <td>{{ s.mode }}</td>
+        <td class="small">{{ s.next_run_at.strftime('%Y-%m-%d %H:%M UTC') if s.next_run_at else '—' }}</td>
+        <td>
+          <form method="post" action="/schedules/{{ s.id }}/toggle" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn btn-sm {{ 'btn-success' if s.enabled else 'btn-outline-secondary' }}">
+              {{ 'on' if s.enabled else 'off' }}</button></form>
+        </td>
+        <td>
+          <form method="post" action="/schedules/{{ s.id }}/delete" class="d-inline"
+                onsubmit="return confirm('Delete schedule {{ s.name }}?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn btn-sm btn-outline-danger">✕</button></form>
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="6" class="text-muted">No schedules yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div></div>
+</div>
+
+<div class="col-lg-5">
+  {% if current_role == 'admin' %}
+  <div class="card"><div class="card-header">New schedule</div><div class="card-body">
+    <form method="post" action="/schedules">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="mb-2"><label class="form-label">Name</label>
+        <input class="form-control form-control-sm" name="name" required></div>
+      <div class="mb-2"><label class="form-label">Kind</label>
+        <select class="form-select form-select-sm" name="kind"
+                onchange="document.getElementById('k-interval').style.display=this.value=='interval'?'block':'none';
+                          document.getElementById('k-daily').style.display=this.value=='daily'?'block':'none';">
+          <option value="daily">daily at time</option>
+          <option value="interval">every N minutes</option>
+        </select></div>
+      <div id="k-daily" class="mb-2"><label class="form-label">Time (HH:MM, local)</label>
+        <input class="form-control form-control-sm" name="daily_time" value="03:30"></div>
+      <div id="k-interval" class="mb-2" style="display:none"><label class="form-label">Interval (minutes)</label>
+        <input class="form-control form-control-sm" name="interval_minutes" value="60"></div>
+      <div class="mb-2"><label class="form-label">Mode</label>
+        <select class="form-select form-select-sm" name="mode">
+          <option value="apply">apply</option>
+          <option value="check">check (dry-run)</option>
+        </select></div>
+      <div class="mb-2"><label class="form-label">Hosts <span class="text-muted small">(none = all enabled)</span></label>
+        <div class="border rounded p-2" style="max-height:120px;overflow:auto">
+          {% for s in servers %}<div class="form-check">
+            <input class="form-check-input" type="checkbox" name="servers" value="{{ s.id }}" id="ss{{ s.id }}">
+            <label class="form-check-label" for="ss{{ s.id }}">{{ s.name }}</label></div>{% endfor %}
+        </div></div>
+      <div class="mb-2"><label class="form-label">Plugins <span class="text-muted small">(none = all enabled)</span></label>
+        <div class="border rounded p-2" style="max-height:120px;overflow:auto">
+          {% for p in plugins %}<div class="form-check">
+            <input class="form-check-input" type="checkbox" name="plugins" value="{{ p.key }}" id="sp{{ p.id }}">
+            <label class="form-check-label" for="sp{{ p.id }}">{{ p.name }}</label></div>{% endfor %}
+        </div></div>
+      <button class="btn btn-primary btn-sm w-100">Create schedule</button>
+    </form>
+  </div></div>
+  {% endif %}
+</div></div>
+{% endblock %}

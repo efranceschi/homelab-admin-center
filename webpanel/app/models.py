@@ -193,6 +193,32 @@ class HostState(Base):
     server: Mapped[Server] = relationship(back_populates="state")
 
 
+class Schedule(Base):
+    """A recurring run definition, executed by the scheduler child process.
+
+    Replaces the legacy cron entry — scheduling is owned by the application.
+    """
+
+    __tablename__ = "schedules"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 'interval' (every N minutes) or 'daily' (at HH:MM local time).
+    kind: Mapped[str] = mapped_column(String(16), default="daily")
+    interval_minutes: Mapped[int | None] = mapped_column(Integer)
+    daily_time: Mapped[str | None] = mapped_column(String(5))  # "HH:MM"
+    mode: Mapped[str] = mapped_column(String(8), default="apply")  # check | apply
+    # Targets: comma-separated server ids, or empty = all enabled servers.
+    server_ids: Mapped[str] = mapped_column(String(512), default="")
+    # Comma-separated plugin keys, or empty = all enabled plugins.
+    plugin_ids: Mapped[str] = mapped_column(String(512), default="")
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Setting(Base):
     __tablename__ = "settings"
 

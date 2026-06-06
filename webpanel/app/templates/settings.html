@@ -46,13 +46,40 @@
       </form>
     </div></div>
 
-    <div class="card"><div class="card-header">Plugins</div><div class="card-body">
+    <div class="card mb-4"><div class="card-header">Plugins</div><div class="card-body">
       <p class="small text-muted">{{ plugins|length }} plugin(s) discovered in
         <code>webpanel/plugins/</code>.</p>
       <form method="post" action="/settings/plugins/reload">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="btn btn-outline-secondary btn-sm w-100">Reload plugins from disk</button>
       </form>
+    </div></div>
+
+    <div class="card"><div class="card-header">System</div><div class="card-body">
+      <p class="small text-muted mb-2">
+        Scheduler:
+        {% if scheduler.running %}<span class="badge bg-success">running (pid {{ scheduler.pid }})</span>
+        {% else %}<span class="badge bg-secondary">stopped</span>{% endif %}<br>
+        Service manager:
+        {% if under_systemd %}<span class="badge bg-info text-dark">systemd (hac)</span>
+        {% else %}<span class="badge bg-warning text-dark">not under systemd</span>{% endif %}
+      </p>
+      <div class="d-flex gap-2">
+        <form method="post" action="/settings/system/update" class="flex-fill"
+              onsubmit="return confirm('Pull latest code, reinstall deps, and restart?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn btn-primary btn-sm w-100">Update &amp; restart</button>
+        </form>
+        <form method="post" action="/settings/system/restart" class="flex-fill"
+              onsubmit="return confirm('Restart the panel now?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn btn-outline-danger btn-sm w-100">Restart</button>
+        </form>
+      </div>
+      {% if not under_systemd %}
+      <div class="form-text mt-2">Update/Restart work best when running as the
+        <code>hac</code> systemd service.</div>
+      {% endif %}
     </div></div>
     {% endif %}
   </div>

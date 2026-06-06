@@ -12,7 +12,9 @@ from .db import init_db, session_scope
 from .plugins import registry, sync_to_db
 from .routers import dashboard, hosts, jobs as jobs_router, plugins as plugins_router
 from .routers import auth as auth_router
+from .routers import schedules as schedules_router
 from .routers import settings as settings_router
+from .scheduler import manager as scheduler_manager
 from .templating import templates
 
 
@@ -40,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(hosts.router)
     app.include_router(plugins_router.router)
     app.include_router(jobs_router.router)
+    app.include_router(schedules_router.router)
     app.include_router(settings_router.router)
 
     @app.on_event("startup")
@@ -50,6 +53,12 @@ def create_app() -> FastAPI:
             print(f"[hac] plugin warning: {w}")
         with session_scope() as db:
             sync_to_db(db)
+        # Scheduling is owned by the app via a separate child process (no cron).
+        scheduler_manager.ensure_running()
+
+    @app.on_event("shutdown")
+    def _shutdown() -> None:
+        scheduler_manager.stop()
 
     @app.get("/")
     def index(request: Request):

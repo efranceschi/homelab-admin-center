@@ -1,7 +1,8 @@
 # lxc-ansible
 
-Idempotent, daily automation for the LXC containers of a Proxmox node — driven from the
-host via `pct exec` (no SSH bootstrap required) and scheduled through `cron.d`.
+Idempotent automation for the LXC containers of a Proxmox node — driven from the host via
+`pct exec` (no SSH bootstrap required). Recurring runs are scheduled by the web panel's own
+scheduler (a child process); the CLI can also be run manually or from any external trigger.
 
 This repository contains two things:
 
@@ -36,8 +37,9 @@ This repository contains two things:
   containers; runs as root on the Proxmox node.
 - **Runtime** — a persistent virtualenv (`.venv`) recreated only when `requirements.txt`
   changes; collections vendored under `collections/`.
-- **Entrypoint** — `run.sh` (flock-guarded against overlapping runs); scheduled in
-  `/etc/cron.d/lxc-ansible` (daily at 03:30).
+- **Entrypoint** — `run.sh` (flock-guarded against overlapping runs) for manual/CLI use.
+  Recurring execution is handled by the web panel's scheduler child process (see below),
+  which shares the same flock so panel, scheduler, and CLI runs never overlap.
 - **Secrets** — non-secret variables in `inventory/group_vars/all/main.yml`; encrypted
   secrets in `inventory/group_vars/all/vault.yml` (Ansible Vault). The vault password lives
   at `/etc/lxc-ansible/vault-pass` (mode `0600`, never versioned).
@@ -79,7 +81,7 @@ Any extra arguments to `run.sh` are passed straight through to `ansible-playbook
 `webpanel/` contains **HomeLab Admin Center** (short name `hac`), a self-contained FastAPI
 application that provides a visual dashboard over the same Ansible roles. It is **additive**:
 it never edits `ansible.cfg`, `run.sh`, `site.yml`, the roles, the connection plugin, or
-`group_vars`, so the daily cron run keeps working unchanged.
+`group_vars`, so the existing CLI/automation keeps working unchanged.
 
 ### Features
 
@@ -95,6 +97,12 @@ it never edits `ansible.cfg`, `run.sh`, `site.yml`, the roles, the connection pl
   **live log streaming** (Server-Sent Events).
 - **Dashboard** — host inventory, last-run status, reboot-required flags, drift detection,
   recent jobs.
+- **Scheduling without cron** — recurring runs (daily at a time, or every N minutes) are
+  executed by the application's own **scheduler child process**, managed from the UI
+  (start/stop/restart). It shares the run flock so scheduled and manual runs never overlap.
+- **Self-update / self-restart** — Settings has **Update & restart** (git pull + reinstall
+  deps + restart) and **Restart** buttons. These work when the panel runs as the `hac`
+  systemd service (`Restart=always`).
 
 ### Install & run
 
@@ -118,7 +126,7 @@ Then open `http://<host>:8910`. On first visit you'll be sent to `/setup` to cre
 admin account.
 
 > The panel uses its **own** virtualenv (`webpanel/.venv-web`) and `requirements-web.txt`,
-> separate from the Ansible `requirements.txt`, so it never disturbs the cron venv. It
+> separate from the Ansible `requirements.txt`, so it never disturbs the automation venv. It
 > invokes the project's existing `ansible-playbook` (from `.venv`) for actual runs.
 
 ### Connection types

@@ -2,23 +2,22 @@
 
 Design constraints (see plan):
   - Single Uvicorn worker -> this in-memory registry is authoritative.
-  - One job at a time, guarded by the SAME flock file run.sh uses
-    (/run/lxc-ansible.lock), so a panel run and the 03:30 cron run never overlap.
+  - One job at a time, guarded by the SAME flock file (/run/lxc-ansible.lock),
+    shared with the scheduler child process so runs never overlap.
   - Live logs streamed to the browser via SSE (an asyncio.Queue per subscriber).
 """
 from __future__ import annotations
 
 import asyncio
 import fcntl
-import json
 import os
-import re
 import shutil
 import signal
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config
+from .ansible_layer import results
 from .db import session_scope
 from .models import HostState, Job, Server
 
@@ -161,16 +160,12 @@ class JobManager:
             self._active = None
 
     # --- post-processing ----------------------------------------------------
-    _RECAP_RE = re.compile(
-        r"^(?P<host>\S+)\s*:\s*ok=(?P<ok>\d+).*?changed=(?P<changed>\d+).*?"
-        r"failed=(?P<failed>\d+)"
-    )
-
     def _finalize(self, rt: JobRuntime, rc: int, server_ids: list[int]) -> None:
         from sqlalchemy import select
 
-        recap = self._parse_recap("".join(rt.lines))
-        reboot_hosts = self._parse_reboot("".join(rt.lines))
+        text = "".join(rt.lines)
+        recap = results.parse_recap(text)
+        reboot_hosts = results.parse_reboot(text)
         with session_scope() as db:
             job = db.get(Job, rt.job_id)
             if job:
@@ -188,43 +183,10 @@ class JobManager:
                     state = HostState(server_id=sid)
                     db.add(state)
                 state.last_job_id = rt.job_id
-                if stats is not None:
-                    if stats["failed"] > 0:
-                        state.last_status = "failed"
-                    elif stats["changed"] > 0:
-                        state.last_status = "changed"
-                    else:
-                        state.last_status = "ok"
+                new_status = results.status_from_stats(stats)
+                if new_status is not None:
+                    state.last_status = new_status
                 state.reboot_required = srv.name in reboot_hosts
-
-    def _parse_recap(self, text: str) -> dict[str, dict]:
-        out: dict[str, dict] = {}
-        in_recap = False
-        for line in text.splitlines():
-            if "PLAY RECAP" in line:
-                in_recap = True
-                continue
-            if in_recap:
-                m = self._RECAP_RE.match(line.strip())
-                if m:
-                    out[m.group("host")] = {
-                        "ok": int(m.group("ok")),
-                        "changed": int(m.group("changed")),
-                        "failed": int(m.group("failed")),
-                    }
-        return out
-
-    @staticmethod
-    def _parse_reboot(text: str) -> set[str]:
-        hosts: set[str] = set()
-        for line in text.splitlines():
-            if "REBOOT REQUIRED" in line:
-                m = re.search(r'"msg":\s*"(\S+?):', line) or re.search(
-                    r'msg:\s*(\S+?):', line
-                )
-                if m:
-                    hosts.add(m.group(1))
-        return hosts
 
     @staticmethod
     def _cleanup_secrets(run_dir: Path) -> None:

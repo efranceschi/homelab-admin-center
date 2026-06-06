@@ -16,8 +16,10 @@ Environment=PANEL_HOST=0.0.0.0
 Environment=PANEL_PORT=8910
 # run-panel.sh creates/updates the dedicated venv then exec's uvicorn (1 worker).
 ExecStart=/opt/lxc-ansible/webpanel/run-panel.sh
-Restart=on-failure
-RestartSec=5
+# `always` so the in-app "Update/Restart" button (which exits the process) and
+# self-update both bring the panel back automatically.
+Restart=always
+RestartSec=3
 # Persistent state lives outside the repo.
 StateDirectory=lxc-ansible
 ReadWritePaths=/var/lib/lxc-ansible /run /var/log/lxc-ansible

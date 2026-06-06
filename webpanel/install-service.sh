@@ -19,6 +19,14 @@ fi
 
 chmod +x "${PANEL_DIR}/run-panel.sh"
 
+# Scheduling is owned by the app (a child process), NOT cron. Disable the legacy
+# cron entry if it exists so the two can't both fire.
+LEGACY_CRON="/etc/cron.d/lxc-ansible"
+if [[ -f "${LEGACY_CRON}" ]]; then
+    echo "[hac] disabling legacy cron entry ${LEGACY_CRON} -> ${LEGACY_CRON}.disabled"
+    mv "${LEGACY_CRON}" "${LEGACY_CRON}.disabled"
+fi
+
 echo "[hac] installing unit -> ${UNIT_DST}"
 install -m 0644 "${UNIT_SRC}" "${UNIT_DST}"
 

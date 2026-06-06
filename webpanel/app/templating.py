@@ -22,4 +22,5 @@ def render(request: Request, name: str, **ctx):
         "current_role": request.session.get("role"),
     }
     base.update(ctx)
-    return templates.TemplateResponse(name, base)
+    # Starlette >=0.29 signature: TemplateResponse(request, name, context).
+    return templates.TemplateResponse(request, name, base)

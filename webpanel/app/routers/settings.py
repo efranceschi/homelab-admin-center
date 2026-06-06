@@ -6,10 +6,12 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import system
 from ..auth import create_user, current_user, require_admin, verify_csrf
 from ..db import db_dependency
 from ..models import AuditLog, User
 from ..plugins import registry
+from ..scheduler import manager as scheduler_manager
 from ..templating import render
 
 router = APIRouter(prefix="/settings")
@@ -23,8 +25,38 @@ def settings_home(
 ):
     users = db.scalars(select(User).order_by(User.username)).all()
     return render(
-        request, "settings.html", users=users, plugins=registry.all()
+        request,
+        "settings.html",
+        users=users,
+        plugins=registry.all(),
+        scheduler=scheduler_manager.status(),
+        under_systemd=system.under_systemd(),
     )
+
+
+@router.post("/system/update", dependencies=[Depends(verify_csrf)])
+def system_update(
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    output = system.run_update()
+    db.add(AuditLog(user_id=user.id, action="system.update"))
+    db.commit()
+    note = system.request_restart(delay=2.0)
+    return render(request, "system_action.html", title="Update", output=output, note=note)
+
+
+@router.post("/system/restart", dependencies=[Depends(verify_csrf)])
+def system_restart(
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    db.add(AuditLog(user_id=user.id, action="system.restart"))
+    db.commit()
+    note = system.request_restart(delay=1.5)
+    return render(request, "system_action.html", title="Restart", output="", note=note)
 
 
 @router.post("/users", dependencies=[Depends(verify_csrf)])
