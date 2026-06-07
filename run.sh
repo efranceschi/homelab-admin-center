@@ -6,10 +6,10 @@
 # ============================================================================
 set -euo pipefail
 
-PROJECT_DIR="/opt/lxc-ansible"
+PROJECT_DIR="/opt/hac"
 VENV="${PROJECT_DIR}/.venv"
-LOG_DIR="/var/log/lxc-ansible"
-LOCK="/run/lxc-ansible.lock"
+LOG_DIR="/var/log/hac"
+LOCK="/run/hac.lock"
 REQ_HASH_FILE="${VENV}/.requirements.sha256"
 
 cd "${PROJECT_DIR}"

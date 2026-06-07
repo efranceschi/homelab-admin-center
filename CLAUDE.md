@@ -12,7 +12,8 @@ Guidance for Claude Code when working in this repository.
 2. The **HAC web control panel** under `webpanel/` (FastAPI, served by `uvicorn`
    via the `hac` systemd service on port 8910).
 
-`lxc-ansible` is only the clone directory (`/opt/lxc-ansible`), not the project name.
+`lxc-ansible` is only the historical clone name; the install directory is now
+`/opt/hac`, not the project name.
 
 ## Working rules
 
