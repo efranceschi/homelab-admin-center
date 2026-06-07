@@ -36,21 +36,34 @@ def _all_enabled_plugin_keys(db: Session) -> list[str]:
     return [p.key for p in rows]
 
 
-def _live_host_status(db: Session) -> dict[int, str]:
-    """Per-host transient activity from the running job: checking | applying.
+def _live_host_status(db: Session) -> dict[int, dict]:
+    """Per-host transient activity from running jobs.
 
-    Lets the hosts table show what each targeted host is doing right now, so the
-    user can follow a check/apply as it runs. Empty when no job is active.
+    Maps server id -> {"activity": "checking"|"applying", "job_id": <id>} for
+    every host targeted by a currently-running job (concurrency-aware), so the
+    hosts table can show what each host is doing and link its status to the live
+    job. Empty when no job is active.
     """
-    rt = manager.active
-    if rt is None or rt.done.is_set():
-        return {}
-    job = db.get(Job, rt.job_id)
-    if job is None or job.status != "running":
-        return {}
-    activity = "applying" if job.mode == "apply" else "checking"
-    sids = [int(x) for x in (job.server_ids or "").split(",") if x.strip().isdigit()]
-    return {sid: activity for sid in sids}
+    out: dict[int, dict] = {}
+    for jid in manager.active_job_ids():
+        rt = manager.get_runtime(jid)
+        if rt is None or rt.done.is_set():
+            continue
+        job = db.get(Job, jid)
+        if job is None or job.status != "running":
+            continue
+        activity = "applying" if job.mode == "apply" else "checking"
+        for x in (job.server_ids or "").split(","):
+            if x.strip().isdigit():
+                out[int(x)] = {"activity": activity, "job_id": jid}
+    return out
+
+
+def _stay(request: Request, default: str = "/hosts") -> RedirectResponse:
+    """Redirect back to the page the action was triggered from (the Referer),
+    so starting a check/apply keeps the user on the current screen instead of
+    jumping to the job. Falls back to ``default``."""
+    return RedirectResponse(request.headers.get("referer") or default, status_code=303)
 
 
 @router.get("")
@@ -134,7 +147,7 @@ async def check_all_hosts(
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))
     db.add(AuditLog(user_id=user.id, action="host.check_all", target="all"))
-    return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+    return _stay(request)
 
 
 @router.post("/apply-all", dependencies=[Depends(verify_csrf)])
@@ -165,7 +178,7 @@ async def apply_all_hosts(
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))
     db.add(AuditLog(user_id=user.id, action="host.apply_all", target="out_of_date"))
-    return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+    return _stay(request)
 
 
 @router.post("/{server_id}/check", dependencies=[Depends(verify_csrf)])
@@ -187,7 +200,7 @@ async def check_host(
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))
     db.add(AuditLog(user_id=user.id, action="host.check", target=srv.name))
-    return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+    return _stay(request)
 
 
 @router.post("/{server_id}/apply", dependencies=[Depends(verify_csrf)])
@@ -212,7 +225,7 @@ async def apply_host(
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))
     db.add(AuditLog(user_id=user.id, action="host.apply", target=srv.name))
-    return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+    return _stay(request)
 
 
 @router.post("", dependencies=[Depends(verify_csrf)])

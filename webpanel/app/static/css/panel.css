@@ -426,6 +426,10 @@ hr { border-color: var(--border-subtle); opacity: 1; }
 
 .chip { font-weight: 500; padding: .35em .6em; }
 
+/* Host config-state cell as a link to its job. */
+.hs-link { display: inline-block; text-decoration: none; }
+.hs-link:hover .st { filter: brightness(1.15); }
+
 /* Dashboard recent-job chips. */
 .job-chip {
   display: inline-flex; flex-direction: column; align-items: center;

@@ -86,7 +86,8 @@ async def run_job(
         return render(request, "error.html", message=str(exc))
     except ValueError as exc:
         return render(request, "error.html", message=str(exc))
-    return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+    # Stay on the Run page; the new job shows in history (status links to it).
+    return RedirectResponse("/jobs", status_code=303)
 
 
 @router.get("/{job_id}")

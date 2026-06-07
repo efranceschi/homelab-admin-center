@@ -1,22 +1,28 @@
 {# Config-state cell for one host. Shared by the hosts table (initial render)
    and the /hosts/states live-refresh endpoint so both look identical.
-   Expects `st` (HostState or None) and `live` ('checking'|'applying'|None). #}
-{% if live == 'checking' %}
+   Expects `st` (HostState or None) and `live` (dict {activity, job_id} or None).
+   The status links to the relevant job: the live job while running, otherwise
+   the host's last job. #}
+{% set act = live.activity if live else None %}
+{% set job_id = (live.job_id if live else None) or (st.last_job_id if st else None) %}
+{% if job_id %}<a href="/jobs/{{ job_id }}" class="hs-link" title="Open job #{{ job_id }}">{% endif %}
+{%- if act == 'checking' %}
   <span class="st st-info">
     <span class="spinner-border spinner-border-sm" style="--bs-spinner-width:.7em;--bs-spinner-height:.7em" role="status" aria-hidden="true"></span>
     Checking…</span>
-{% elif live == 'applying' %}
+{%- elif act == 'applying' %}
   <span class="st st-warn">
     <span class="spinner-border spinner-border-sm" style="--bs-spinner-width:.7em;--bs-spinner-height:.7em" role="status" aria-hidden="true"></span>
     Applying…</span>
-{% elif st and st.config_status == 'out_of_date' %}
+{%- elif st and st.config_status == 'out_of_date' %}
   <span class="st st-warn">Out of date{% if st.pending_changes %} ({{ st.pending_changes }}){% endif %}</span>
-{% elif st and st.config_status == 'updated' %}
+{%- elif st and st.config_status == 'updated' %}
   <span class="st st-ok">Updated</span>
-{% else %}
+{%- else %}
   <span class="st st-idle">Unknown</span>
-{% endif %}
-{% if live %}
+{%- endif %}
+{% if job_id %}</a>{% endif %}
+{% if act %}
   <div class="text-muted small">in progress…</div>
 {% elif st and st.config_checked_at %}
   <div class="text-muted small">{{ st.config_checked_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>

@@ -29,11 +29,14 @@
       <td class="small mono text-code">{{ j.target_ref or '—' }}</td>
       <td class="small mono">{{ j.plugin_tags }}</td>
       <td>
-        {% if j.status == 'success' %}<span class="st st-ok">{{ icon('check', 12) }} success</span>
-        {% elif j.status == 'failed' %}<span class="st st-error">{{ icon('x', 12) }} failed</span>
-        {% elif j.status == 'running' %}<span class="st st-info st-running">{{ icon('activity', 12) }} running</span>
-        {% elif j.status == 'cancelled' %}<span class="st st-idle">cancelled</span>
-        {% else %}<span class="st st-idle">{{ j.status }}</span>{% endif %}
+        <a href="/jobs/{{ j.id }}" class="hs-link" title="Open job #{{ j.id }}">
+        {%- if j.status == 'success' %}<span class="st st-ok">{{ icon('check', 12) }} success</span>
+        {%- elif j.status == 'failed' %}<span class="st st-error">{{ icon('x', 12) }} failed</span>
+        {%- elif j.status == 'running' %}<span class="st st-info st-running">{{ icon('activity', 12) }} running</span>
+        {%- elif j.status == 'queued' %}<span class="st st-idle">queued</span>
+        {%- elif j.status == 'cancelled' %}<span class="st st-idle">cancelled</span>
+        {%- else %}<span class="st st-idle">{{ j.status }}</span>{% endif -%}
+        </a>
       </td>
       <td class="text-end">
         {% if j.status in ['failed', 'cancelled'] and (j.mode != 'apply' or current_role == 'admin') %}

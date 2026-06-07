@@ -84,6 +84,10 @@ class JobManager:
     def get_runtime(self, job_id: int) -> JobRuntime | None:
         return self._active.get(job_id)
 
+    def active_job_ids(self) -> list[int]:
+        """Job ids currently running (may be more than one with concurrency)."""
+        return list(self._active.keys())
+
     def running_count(self) -> int:
         return len(self._active)
 
