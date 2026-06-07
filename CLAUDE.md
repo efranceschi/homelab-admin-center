@@ -33,11 +33,19 @@ comments, and UI text — even though we may converse in Portuguese.
 The `hac` service runs `uvicorn` **without** `--reload`, so it keeps serving the
 old code until restarted. Whenever you change anything the running panel loads
 (Python under `webpanel/app/`, templates, static assets, plugin definitions),
-restart the service immediately so the change takes effect:
+restart the panel immediately so the change takes effect.
+
+Use the bundled script — it drives the panel's own self-restart endpoint and
+needs **no sudo** (the process exits itself and systemd respawns it):
 
 ```bash
-systemctl restart hac
+HAC_USER=admin HAC_PASS=… ./webpanel/restart.sh
 ```
+
+Credentials resolve from `HAC_USER`/`HAC_PASS` or a `~/.netrc` entry for the
+host; override the URL with `HAC_URL` (default `http://127.0.0.1:8910`). The
+script waits for the panel to come back. Privileged fallback when you have root:
+`sudo systemctl restart hac`.
 
 Verify after restarting (e.g. `systemctl is-active hac`, or check the live routes
 via `curl -s http://127.0.0.1:8910/openapi.json`).
