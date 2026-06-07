@@ -256,24 +256,26 @@ hr { border-color: var(--border-subtle); opacity: 1; }
   font-family: var(--fonts-mono); font-size: .8rem; color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.sidebar-foot-actions { display: flex; align-items: center; gap: .4rem; }
-.sidebar-foot-actions .icon-btn { flex: 0 0 auto; }
+.sidebar-foot-actions { display: flex; gap: .4rem; }
 
-/* Always-on job activity readout (running / max concurrent + queued). Amber
-   when something is active, muted when idle. Sits inline in the footer action
-   row between refresh and logout; clicking jumps to /jobs. The full
-   "N/M running · K queued" phrasing lives in the title tooltip. */
+/* Always-on job activity readout (running / max concurrent + queued), centred
+   in the top bar's leftover space between the page title and the instance
+   identity. Absolutely positioned so it stays centred regardless of the side
+   widths. Amber when something is active, muted when idle; clicking jumps to
+   /jobs. Hidden on narrow screens to avoid colliding with the title/identity. */
 .queue-indicator {
-  display: flex; align-items: center; gap: .25rem;
-  flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap;
-  font-family: var(--fonts-mono); font-size: .7rem;
+  position: absolute; left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap;
+  font-family: var(--fonts-mono); font-size: .75rem;
   color: var(--text-secondary); text-decoration: none;
+  padding: .2rem .6rem; border-radius: 4px;
 }
 .queue-indicator .qi-ico { color: var(--accent-primary); display: inline-flex; }
 .queue-indicator.is-idle { color: var(--text-muted); }
 .queue-indicator.is-idle .qi-ico { color: var(--text-muted); }
-.queue-indicator:hover { color: var(--text-primary); }
+.queue-indicator:hover { color: var(--text-primary); background: var(--bg-elevated); }
 .queue-indicator .qi-queued b { color: var(--accent-primary); }
+@media (max-width: 991.98px) { .queue-indicator { display: none; } }
 
 /* Icon-only square button used in the sidebar footer (theme, refresh, logout). */
 .icon-btn {
