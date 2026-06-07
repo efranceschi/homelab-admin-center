@@ -20,6 +20,35 @@ from ..models import Credential, Plugin, PluginConfig
 from ..plugins import registry, resolve_config
 
 
+def resolve_host_vars(db: Session, plugin_ids: list[str], server_id: int) -> dict:
+    """Effective non-secret config for one host across the selected plugins.
+
+    Merges each plugin's resolved overlay (defaults < global < group(s) < host),
+    so the result can be written as the host's inventory hostvars — making
+    per-group/per-host configuration apply on multi-host runs too.
+    """
+    merged: dict[str, object] = {}
+    for pid in plugin_ids:
+        if registry.get(pid) is None:
+            continue
+        merged.update(resolve_config(db, pid, server_id))
+    return merged
+
+
+def build_secret_vars(
+    db: Session, run_dir: Path, plugin_ids: list[str]
+) -> Path | None:
+    """Write the vault-encrypted secrets file (global scope) or return None."""
+    secrets: dict[str, str] = {}
+    for pid in plugin_ids:
+        if registry.get(pid) is None:
+            continue
+        secrets.update(_collect_secrets(db, pid))
+    if not secrets:
+        return None
+    return _write_vault_file(run_dir, secrets)
+
+
 def build_extra_vars(
     db: Session, run_dir: Path, plugin_ids: list[str], server_id: int | None
 ) -> tuple[Path | None, Path | None]:

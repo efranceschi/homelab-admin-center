@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from .. import crypto
 from ..auth import current_user, require_admin, verify_csrf
 from ..db import db_dependency
-from ..models import AuditLog, Credential, Plugin, PluginConfig, User
+from ..models import AuditLog, Credential, HostGroup, Plugin, PluginConfig, User
 from ..plugins import registry, resolve_config
 from ..templating import render
 
@@ -35,6 +35,8 @@ def list_plugins(
 def configure_form(
     plugin_id: str,
     request: Request,
+    scope: str = "global",
+    ref: int | None = None,
     db: Session = Depends(db_dependency),
     user: User = Depends(current_user),
 ):
@@ -42,9 +44,27 @@ def configure_form(
     if lp is None:
         return RedirectResponse("/plugins", status_code=303)
     row = db.scalar(select(Plugin).where(Plugin.key == plugin_id))
-    values = resolve_config(db, plugin_id, None)
-    # Determine which secret fields already have a stored credential.
-    secret_set = _stored_secret_vars(db, row)
+    groups = db.scalars(select(HostGroup).order_by(HostGroup.name)).all()
+    valid_ref = ref in {g.id for g in groups}
+    scope = "group" if (scope == "group" and ref and valid_ref) else "global"
+    inherited: dict = {}
+    if scope == "group":
+        # Editing a group's sparse overlay: show only what's explicitly set here;
+        # the inherited effective value (global) is shown as placeholder context.
+        inherited = resolve_config(db, plugin_id, None)
+        cfg = db.scalar(
+            select(PluginConfig).where(
+                PluginConfig.plugin_id == row.id,
+                PluginConfig.scope == "group",
+                PluginConfig.scope_ref_id == ref,
+            )
+        ) if row else None
+        values = json.loads(cfg.config_json) if cfg else {}
+        values.pop("__secrets__", None)
+        secret_set: set[str] = set()
+    else:
+        values = resolve_config(db, plugin_id, None)
+        secret_set = _stored_secret_vars(db, row)
     return render(
         request,
         "plugin_config.html",
@@ -52,6 +72,10 @@ def configure_form(
         row=row,
         values=values,
         secret_set=secret_set,
+        groups=groups,
+        scope=scope,
+        ref=ref,
+        inherited=inherited,
     )
 
 
@@ -68,6 +92,45 @@ async def save_config(
         return RedirectResponse("/plugins", status_code=303)
 
     form = await request.form()
+    scope = form.get("scope") or "global"
+    ref = form.get("ref")
+    ref_id = int(ref) if (scope == "group" and ref and str(ref).isdigit()) else None
+
+    # --- Group scope: sparse, non-secret overlay (secrets stay global). ---
+    if scope == "group" and ref_id is not None:
+        sparse: dict[str, object] = {}
+        for f in lp.fields:
+            if f.secret:
+                continue  # secrets are configured at the Global scope only
+            raw = form.get(f.var)
+            if f.type in ("bool", "yesno"):
+                # tri-state select: "" = inherit, else explicit value
+                if raw in (None, ""):
+                    continue
+                sparse[f.var] = (raw == "true") if f.type == "bool" else raw
+            else:
+                if raw is not None and str(raw).strip() != "":
+                    sparse[f.var] = raw
+        payload = json.dumps(sparse)
+        cfg = db.scalar(
+            select(PluginConfig).where(
+                PluginConfig.plugin_id == row.id,
+                PluginConfig.scope == "group",
+                PluginConfig.scope_ref_id == ref_id,
+            )
+        )
+        if cfg is None:
+            db.add(PluginConfig(
+                plugin_id=row.id, scope="group", scope_ref_id=ref_id,
+                config_json=payload, updated_by=user.id,
+            ))
+        else:
+            cfg.config_json = payload
+            cfg.updated_by = user.id
+        db.add(AuditLog(user_id=user.id, action="plugin.config", target=f"{plugin_id}@group:{ref_id}"))
+        return RedirectResponse(f"/plugins/{plugin_id}?scope=group&ref={ref_id}", status_code=303)
+
+    # --- Global scope: full config + secrets (unchanged behaviour). ---
     non_secret: dict[str, object] = {}
     box = crypto.get_box()
 

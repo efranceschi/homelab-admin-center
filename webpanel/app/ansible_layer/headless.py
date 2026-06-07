@@ -76,10 +76,12 @@ def run_now(
 
     run_dir = config.RUN_DIRS / f"job-{job_id}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    inv = inventory_builder.build_inventory(run_dir, servers)
-    single_sid = servers[0].id if len(servers) == 1 else None
-    extra, secret = vars_builder.build_extra_vars(db, run_dir, plugin_ids, single_sid)
-    cmd = runner.build_command(inv, tags, [s.name for s in servers], check, extra, secret)
+    host_vars = {
+        s.id: vars_builder.resolve_host_vars(db, plugin_ids, s.id) for s in servers
+    }
+    inv = inventory_builder.build_inventory(run_dir, servers, host_vars)
+    secret = vars_builder.build_secret_vars(db, run_dir, plugin_ids)
+    cmd = runner.build_command(inv, tags, [s.name for s in servers], check, None, secret)
     env = runner.build_env()
     log_path = run_dir / "stdout.log"
 

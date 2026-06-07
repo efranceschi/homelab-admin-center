@@ -3,23 +3,60 @@
 {% block nav_active %}plugins{% endblock %}
 {% block title %}Configure {{ lp.name }} · {{ app_name }}{% endblock %}
 {% block content %}
+{% set is_group = scope == 'group' %}
+{% set cur_group = (groups | selectattr('id', 'equalto', ref) | first) if is_group else None %}
 <nav aria-label="breadcrumb"><ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/plugins">plugins</a></li>
-  <li class="breadcrumb-item active">{{ lp.id }}</li>
+  <li class="breadcrumb-item"><a href="/plugins/{{ lp.id }}">{{ lp.id }}</a></li>
+  <li class="breadcrumb-item active">{{ ('group: ' ~ cur_group.name) if cur_group else 'global' }}</li>
 </ol></nav>
 
+{# ---- Scope switcher ---------------------------------------------------- #}
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <a href="/plugins/{{ lp.id }}" class="btn btn-sm {{ 'btn-primary' if not is_group else 'btn-outline-secondary' }}">
+    {{ icon('settings', 14) }} Global</a>
+  {% for g in groups %}
+  <a href="/plugins/{{ lp.id }}?scope=group&ref={{ g.id }}"
+     class="btn btn-sm {{ 'btn-primary' if (is_group and g.id == ref) else 'btn-outline-secondary' }}">
+    {{ icon('box', 14) }} {{ g.name }}</a>
+  {% endfor %}
+</div>
+
 <div class="row"><div class="col-lg-7">
-  <div class="card"><div class="card-header">Global configuration — {{ lp.name }}</div>
+  <div class="card">
+    <div class="card-header">{{ ('Group overlay — ' ~ cur_group.name) if cur_group else ('Global configuration — ' ~ lp.name) }}</div>
   <div class="card-body">
-    <p class="text-muted small">These values are applied to all targeted hosts via Ansible
-      extra-vars. They never modify the project's <code>group_vars</code> files.</p>
+    {% if is_group %}
+    <p class="text-muted small">Only the fields you set here override <b>Global</b> for
+      hosts in this group (and its subgroups). Leave a field on <code>inherit</code> /
+      blank to inherit. Secrets are configured at the Global scope only.</p>
+    {% else %}
+    <p class="text-muted small">Applied to targeted hosts as inventory host vars
+      (defaults &lt; global &lt; group &lt; host). Never modifies the project's
+      <code>group_vars</code> files.</p>
+    {% endif %}
     <form method="post" action="/plugins/{{ lp.id }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="scope" value="{{ scope }}">
+      {% if is_group %}<input type="hidden" name="ref" value="{{ ref }}">{% endif %}
       {% for f in lp.fields %}
+      {% if is_group and f.secret %}{% else %}
       <div class="mb-3">
         <label class="form-label">{{ f.label }}
           {% if f.secret %}<span class="badge bg-warning text-dark">secret</span>{% endif %}</label>
-        {% if f.type == 'bool' %}
+
+        {% if is_group and f.type in ['bool', 'yesno'] %}
+          {# tri-state: inherit / yes / no #}
+          {% set cv = values.get(f.var) %}
+          <select class="form-select" name="{{ f.var }}">
+            <option value="" {% if f.var not in values %}selected{% endif %}>— inherit —</option>
+            <option value="{{ 'true' if f.type == 'bool' else 'yes' }}"
+                    {% if cv in [true, 'yes', 'true'] %}selected{% endif %}>yes</option>
+            <option value="{{ 'false' if f.type == 'bool' else 'no' }}"
+                    {% if f.var in values and cv in [false, 'no', 'false'] %}selected{% endif %}>no</option>
+          </select>
+
+        {% elif f.type == 'bool' %}
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" name="{{ f.var }}"
                    {% if values.get(f.var) %}checked{% endif %}>
@@ -32,6 +69,7 @@
           </div>
         {% elif f.type == 'select' %}
           <select class="form-select" name="{{ f.var }}">
+            {% if is_group %}<option value="" {% if f.var not in values %}selected{% endif %}>— inherit ({{ inherited.get(f.var, '') }}) —</option>{% endif %}
             {% for c in f.choices %}
               <option value="{{ c }}" {% if values.get(f.var)|string == c %}selected{% endif %}>{{ c }}</option>
             {% endfor %}
@@ -39,19 +77,22 @@
         {% elif f.type == 'textarea' %}
           <textarea class="form-control" name="{{ f.var }}"
                     rows="{{ 8 if f.secret else 4 }}"
-                    {% if f.secret %}placeholder="{{ '(stored in the vault : keep blank to keep)' if f.var in secret_set else 'not set' }}"{% endif %}>{% if not f.secret %}{{ values.get(f.var, '') }}{% endif %}</textarea>
+                    {% if f.secret %}placeholder="{{ '(stored in the vault : keep blank to keep)' if f.var in secret_set else 'not set' }}"{% elif is_group %}placeholder="inherit: {{ inherited.get(f.var, '') }}"{% endif %}>{% if not f.secret %}{{ values.get(f.var, '') }}{% endif %}</textarea>
         {% elif f.secret %}
           <input class="form-control" type="password" name="{{ f.var }}"
                  placeholder="{{ '(stored in the vault : keep blank to keep)' if f.var in secret_set else 'not set' }}">
         {% else %}
-          <input class="form-control" name="{{ f.var }}" value="{{ values.get(f.var, '') }}">
+          <input class="form-control" name="{{ f.var }}" value="{{ values.get(f.var, '') }}"
+                 {% if is_group %}placeholder="inherit: {{ inherited.get(f.var, '') }}"{% endif %}>
         {% endif %}
         {% if f.help %}<div class="form-text">{{ f.help }}</div>{% endif %}
         <div class="form-text"><code>{{ f.var }}</code></div>
       </div>
+      {% endif %}
       {% endfor %}
       {% if current_role == 'admin' %}
-      <button class="btn btn-primary"><span class="btn-ico">{{ icon('check', 14) }}</span> Save configuration</button>
+      <button class="btn btn-primary"><span class="btn-ico">{{ icon('check', 14) }}</span>
+        Save {{ 'group overlay' if is_group else 'configuration' }}</button>
       {% else %}<div class="alert alert-info py-2 mb-0">Viewers cannot edit configuration.</div>{% endif %}
     </form>
   </div></div>
@@ -65,6 +106,11 @@
       <dt class="col-5">Check mode</dt><dd class="col-7">{{ 'yes' if lp.supports_check_mode else 'no' }}</dd>
       <dt class="col-5">Order</dt><dd class="col-7">{{ lp.order }}</dd>
     </dl>
+    {% if is_group %}
+    <hr>
+    <p class="mb-0 text-muted">Editing the <b>{{ cur_group.name }}</b> overlay. Hosts
+      in this group (directly or via nesting) get these values on top of Global.</p>
+    {% endif %}
   </div></div>
 </div></div>
 {% endblock %}

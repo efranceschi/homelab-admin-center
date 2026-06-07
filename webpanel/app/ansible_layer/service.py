@@ -102,18 +102,20 @@ async def start_job(
     run_dir = config.RUN_DIRS / f"job-{job_id}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    inv_path = inventory_builder.build_inventory(run_dir, servers)
-    # For a single-host run we resolve per-host config; otherwise global/group.
-    single_sid = servers[0].id if len(servers) == 1 else None
-    extra_path, secret_path = vars_builder.build_extra_vars(
-        db, run_dir, plugin_ids, single_sid
-    )
+    # Resolve each host's effective config (defaults < global < group(s) < host)
+    # into inventory hostvars, so per-group/per-host config applies even on
+    # multi-host runs. Secrets stay global, in a vault-encrypted extra-vars file.
+    host_vars = {
+        s.id: vars_builder.resolve_host_vars(db, plugin_ids, s.id) for s in servers
+    }
+    inv_path = inventory_builder.build_inventory(run_dir, servers, host_vars)
+    secret_path = vars_builder.build_secret_vars(db, run_dir, plugin_ids)
     cmd = runner.build_command(
         inventory_path=inv_path,
         tags=tags,
         limit_hosts=[s.name for s in servers],
         check=check,
-        extra_vars_path=extra_path,
+        extra_vars_path=None,
         secret_vars_path=secret_path,
     )
     env = runner.build_env()

@@ -240,14 +240,11 @@ def resolve_config(db: Session, plugin_id: str, server_id: int | None = None) ->
 
     overlay("global", None)
     if server_id is not None:
-        from .models import HostGroupMember
+        from .groups import effective_group_ids_for_host
 
-        group_ids = db.scalars(
-            select(HostGroupMember.host_group_id).where(
-                HostGroupMember.server_id == server_id
-            )
-        ).all()
-        for gid in sorted(group_ids):
+        # Ancestor groups first, then the host's direct groups, so a more
+        # specific (child) group overrides its parents; host scope wins last.
+        for gid in effective_group_ids_for_host(db, server_id):
             overlay("group", gid)
         overlay("host", server_id)
 

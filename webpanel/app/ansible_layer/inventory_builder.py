@@ -27,8 +27,16 @@ def _write_key_file(run_dir: Path, server: Server, secret: str) -> Path:
     return key_path
 
 
-def build_inventory(run_dir: Path, servers: list[Server]) -> Path:
-    """Write inventory.json for the given servers and return its path."""
+def build_inventory(
+    run_dir: Path,
+    servers: list[Server],
+    host_vars: dict[int, dict] | None = None,
+) -> Path:
+    """Write inventory.json for the given servers and return its path.
+
+    ``host_vars`` (server id -> resolved plugin config) is merged into each
+    host's vars so per-group/per-host configuration applies on multi-host runs.
+    """
     hosts: dict[str, dict] = {}
 
     for srv in servers:
@@ -58,6 +66,9 @@ def build_inventory(run_dir: Path, servers: list[Server]) -> Path:
             hv["pct_name"] = host
         else:
             raise ValueError(f"unknown connection_type: {srv.connection_type}")
+
+        if host_vars and srv.id in host_vars:
+            hv.update(host_vars[srv.id])
 
         hosts[host] = hv
 
