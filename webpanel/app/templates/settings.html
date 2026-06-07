@@ -122,6 +122,9 @@
         Scheduler:
         {% if scheduler.running %}<span class="badge bg-success">running (pid {{ scheduler.pid }})</span>
         {% else %}<span class="badge bg-secondary">stopped</span>{% endif %}<br>
+        Running as:
+        {% if service_user.is_root %}<span class="badge bg-warning text-dark" title="Running as root — consider the unprivileged hac user">{{ service_user.name }} (uid {{ service_user.uid }})</span>
+        {% else %}<span class="badge bg-success">{{ service_user.name }} (uid {{ service_user.uid }})</span>{% endif %}<br>
         Service manager:
         {% if under_systemd %}<span class="badge bg-info text-dark">systemd (hac)</span>
         {% else %}<span class="badge bg-warning text-dark">not under systemd</span>{% endif %}

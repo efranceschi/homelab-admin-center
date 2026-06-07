@@ -10,15 +10,15 @@
 # process itself is no longer root — the escalation surface is just these rules.
 # Drop the /bin/sh rule if you stop managing the Proxmox node via the Local
 # connection.
+#
+# In-app Restart needs NO rule here: the panel owns its own process, so it just
+# exits and systemd (Restart=always) respawns it (see app/system.py).
 
 Defaults:hac !requiretty
 
 # Proxmox container management — host picker (proxmox.py) and the pct connection
 # plugin (plugins/connection/pct.py: exec / push / pull).
 hac ALL=(root) NOPASSWD: /usr/sbin/pct, /usr/bin/pct
-
-# In-app self-restart (Settings -> Restart and Update & restart).
-hac ALL=(root) NOPASSWD: /usr/bin/systemctl restart hac, /usr/bin/systemctl restart hac.service
 
 # Node self-management: ansible 'become' for Local-connection jobs that
 # configure the Proxmox host itself (timezone/apt/ssh/sssd). Ansible escalates

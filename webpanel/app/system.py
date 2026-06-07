@@ -7,6 +7,7 @@ dev run), it falls back to re-executing the current process.
 from __future__ import annotations
 
 import os
+import pwd
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,16 @@ from . import config
 
 def under_systemd() -> bool:
     return os.path.exists("/run/systemd/system") and shutil.which("systemctl") is not None
+
+
+def service_user() -> dict:
+    """The OS user/uid the panel process runs as (shown in Settings > System)."""
+    uid = os.geteuid()
+    try:
+        name = pwd.getpwuid(uid).pw_name
+    except KeyError:
+        name = str(uid)
+    return {"name": name, "uid": uid, "is_root": uid == 0}
 
 
 def _run(cmd: list[str]) -> str:
@@ -39,25 +50,21 @@ def run_update() -> str:
 
 
 def request_restart(delay: float = 1.0) -> str:
-    """Schedule a restart shortly after the current response is sent."""
-    if under_systemd():
-        systemctl = shutil.which("systemctl") or "systemctl"
-        # The service runs as the unprivileged `hac` user; restarting the unit
-        # needs root, granted via /etc/sudoers.d/hac. Run directly as root (dev)
-        # no sudo is used.
-        sudo = "sudo -n " if os.geteuid() != 0 else ""
-        subprocess.Popen(
-            ["bash", "-c", f"sleep {delay}; {sudo}{systemctl} restart hac"],
-            start_new_session=True,
-        )
-        return "Restarting via systemd (hac.service)…"
+    """Schedule a restart shortly after the current response is sent.
 
-    def _reexec() -> None:
+    The panel owns its own process, so it never needs root (nor `systemctl`) to
+    restart. Under systemd it simply exits and is respawned by ``Restart=always``
+    — a fresh ``run-panel.sh`` that rebuilds the venv if needed and re-execs
+    uvicorn. Off systemd (foreground dev) it re-executes itself in place.
+    """
+    def _respawn() -> None:
         time.sleep(delay)
+        if under_systemd():
+            os._exit(0)  # systemd (Restart=always) brings us back fresh
         try:
             os.execv(sys.executable, [sys.executable, sys.argv[0], *sys.argv[1:]])
         except Exception:
             os._exit(0)  # let any supervisor bring it back
 
-    threading.Thread(target=_reexec, daemon=True).start()
-    return "Re-executing process…"
+    threading.Thread(target=_respawn, daemon=True).start()
+    return "Restarting (process will respawn)…"

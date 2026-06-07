@@ -242,16 +242,19 @@ ansible-vault edit inventory/group_vars/all/vault.yml   # URI, base DN, bind DN/
   a **least-privilege sudo policy** at `/etc/sudoers.d/hac` (mode `0440`, validated with
   `visudo -cf`). The panel obtains root **only** for these operations:
   - `pct` — Proxmox container management (host picker + the `pct` connection plugin).
-  - `systemctl restart hac` — the in-app **Restart** / **Update & restart**.
   - `/bin/sh` via ansible `become` — applying roles to the Proxmox **node itself** (the
     *Local* connection: timezone/apt/ssh/sssd). Drop this rule if you don't manage the node
     from the panel, for a tighter footprint.
 
+  > The in-app **Restart** / **Update & restart** needs **no** sudo rule: the panel owns its
+  > own process, so it simply exits and systemd (`Restart=always`) respawns it fresh.
+  > Self-update (`git pull` + `pip install`) also needs no sudo — it runs as the `hac` owner
+  > of the checkout and venvs.
+  >
   > `pct exec` and the `become` grant are each root-equivalent in effect. The hard win is
   > that the **network-facing process, its database, secrets, and files are no longer root** —
-  > the escalation surface is reduced to those three audited sudoers entries. The unit must
-  > **not** set `NoNewPrivileges=yes` (it would block sudo). Self-update (`git pull` +
-  > `pip install`) needs no sudo — it runs as the `hac` owner of the checkout and venvs.
+  > the escalation surface is reduced to those two audited sudoers entries. The unit must
+  > **not** set `NoNewPrivileges=yes` (it would block sudo).
 
 - The panel binds to `0.0.0.0:8910` by default for LAN access. It has no built-in IP
   allowlist, so restrict access at the firewall layer or front it with an authenticated

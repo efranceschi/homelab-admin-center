@@ -48,6 +48,7 @@ def settings_home(
         plugins=registry.all(),
         scheduler=scheduler_manager.status(),
         under_systemd=system.under_systemd(),
+        service_user=system.service_user(),
         max_concurrent_jobs=_get_setting_int(db, "max_concurrent_jobs", DEFAULT_MAX_CONCURRENT),
         max_concurrent_cap=MAX_MAX_CONCURRENT,
         auto_refresh_seconds=_get_setting_int(db, "auto_refresh_seconds", 180),

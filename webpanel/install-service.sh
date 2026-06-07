@@ -97,12 +97,13 @@ chown -R "${HAC_USER}:${HAC_GROUP}" /etc/hac /var/lib/hac /var/log/hac
 say "setting ownership of ${ANSIBLE_ROOT} -> ${HAC_USER}:${HAC_GROUP}"
 chown -R "${HAC_USER}:${HAC_GROUP}" "${ANSIBLE_ROOT}"
 
-# --- disable the legacy cron entry (scheduling is owned by the app) ---------
-LEGACY_CRON="/etc/cron.d/lxc-ansible"
-if [[ -f "${LEGACY_CRON}" ]]; then
-    say "disabling legacy cron entry ${LEGACY_CRON} -> ${LEGACY_CRON}.disabled"
-    mv "${LEGACY_CRON}" "${LEGACY_CRON}.disabled"
-fi
+# --- remove the legacy cron entry (scheduling is owned by the app) ----------
+for legacy in /etc/cron.d/lxc-ansible /etc/cron.d/lxc-ansible.disabled; do
+    if [[ -e "${legacy}" ]]; then
+        say "removing legacy cron entry ${legacy}"
+        rm -f "${legacy}"
+    fi
+done
 
 # --- render the unit with the ACTUAL install paths --------------------------
 # The template ships with /opt/hac defaults; rewrite them so the unit
