@@ -4,4 +4,4 @@ ansible-core>=2.18,<2.19
 # (community.general.proxmox dynamic inventory via API). Kept here so the
 # SSH/future path works without changing requirements.
 proxmoxer>=2.0
-requests>=2.31
+requests>=2.34.2
