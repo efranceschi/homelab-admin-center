@@ -14,7 +14,6 @@ from ..auth import current_user, require_admin, verify_csrf
 from ..db import db_dependency
 from ..jobs import manager
 from ..models import HostGroup, Job, Plugin, Server, User
-from ..plugins import registry
 from ..templating import render
 
 router = APIRouter(prefix="/jobs")
@@ -78,7 +77,7 @@ async def run_job(
         return RedirectResponse("/jobs", status_code=303)
 
     try:
-        job = await start_job(
+        await start_job(
             db,
             user_id=user.id,
             server_ids=server_ids,

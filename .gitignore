@@ -1,10 +1,19 @@
 # Ephemeral runtime / artifacts — do not version.
 .venv/
+.venv-test/
 collections/
 __pycache__/
 *.pyc
 *.retry
 *.log
+
+# Test / coverage artifacts.
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
 
 # The `hac` service user's home IS this checkout (/opt/hac), so its login
 # dotfiles and tool caches land here — keep them out of git.

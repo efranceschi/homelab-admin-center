@@ -1,0 +1,23 @@
+# yamllint config — lenient, matching the project's existing YAML style.
+extends: default
+
+rules:
+  line-length:
+    max: 160
+    level: warning
+  document-start: disable
+  truthy:
+    check-keys: false       # allow Ansible `yes/no` and GH Actions `on:`
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  braces:
+    max-spaces-inside: 1
+  octal-values: enable
+
+ignore: |
+  collections/
+  .venv/
+  .venv-web/
+  webpanel/app/static/
+  inventory/group_vars/all/vault.yml

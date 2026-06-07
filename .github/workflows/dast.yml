@@ -1,0 +1,90 @@
+name: dast
+
+on:
+  pull_request:
+  schedule:
+    - cron: "42 4 * * *"   # nightly, 04:42 UTC
+  workflow_dispatch:
+
+# DAST is intentionally NON-BLOCKING: it boots the panel and runs dynamic scans,
+# publishing reports as artifacts. Individual scan steps use continue-on-error so
+# a finding never fails the PR; review the uploaded reports instead.
+permissions:
+  contents: read
+
+env:
+  PANEL_STATE_DIR: /tmp/hac/state
+  PANEL_DB_PATH: /tmp/hac/state/panel.sqlite3
+  PANEL_MASTER_KEY: /tmp/hac/etc/panel.key
+  PANEL_SESSION_SECRET: /tmp/hac/etc/panel.session
+  PANEL_VAULT_PASSWORD_FILE: /tmp/hac/etc/vault-pass
+  PANEL_RUN_LOCK: /tmp/hac/run/hac.lock
+  PANEL_DISABLE_SCHEDULER: "1"
+
+jobs:
+  dast:
+    name: dast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: webpanel/requirements-web.txt
+
+      - name: Install panel + scanner
+        run: pip install -r webpanel/requirements-web.txt "schemathesis<4"
+
+      - name: Prepare runtime dirs
+        run: mkdir -p /tmp/hac/state /tmp/hac/etc /tmp/hac/run
+
+      - name: Boot the panel
+        working-directory: webpanel
+        run: |
+          nohup uvicorn app.main:app --host 0.0.0.0 --port 8910 > /tmp/uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8910/openapi.json >/dev/null 2>&1; then
+              echo "panel is up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "panel failed to start"; cat /tmp/uvicorn.log; exit 1
+
+      - name: Seed first-run admin
+        run: |
+          csrf=$(curl -s -c /tmp/cj http://127.0.0.1:8910/setup \
+            | grep -oP 'name="csrf_token" value="\K[^"]+')
+          curl -s -b /tmp/cj -c /tmp/cj -H "x-csrf-token: ${csrf}" \
+            --data-urlencode username=admin \
+            --data-urlencode password=dast-admin-pass \
+            --data-urlencode password2=dast-admin-pass \
+            http://127.0.0.1:8910/setup -o /dev/null
+          echo "admin seeded"
+
+      - name: Schemathesis (API fuzzing of the JSON surface)
+        continue-on-error: true
+        run: |
+          schemathesis run http://127.0.0.1:8910/openapi.json \
+            --checks all --hypothesis-max-examples 20 \
+            --report-junit-path /tmp/schemathesis-junit.xml || true
+
+      - name: OWASP ZAP baseline (passive spider scan)
+        continue-on-error: true
+        run: |
+          docker run --network host -v "${{ github.workspace }}:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://127.0.0.1:8910 -r zap-report.html -I || true
+
+      - name: Upload DAST reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dast-reports
+          path: |
+            zap-report.html
+            /tmp/schemathesis-junit.xml
+            /tmp/uvicorn.log
+          retention-days: 14
+          if-no-files-found: ignore

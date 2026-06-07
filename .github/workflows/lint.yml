@@ -1,0 +1,39 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install lint tools
+        run: pip install ruff yamllint "ansible-lint>=24" "ansible-core>=2.18,<2.19"
+
+      - name: ruff (lint)
+        run: ruff check .
+
+      - name: ruff (format check — test code)
+        run: ruff format --check webpanel/tests tests
+
+      - name: yamllint
+        run: yamllint -c .yamllint roles playbooks inventory .github
+
+      - name: ansible-lint
+        run: ansible-lint
+
+      - name: shellcheck
+        run: shellcheck run.sh install.sh webpanel/run-panel.sh webpanel/install-service.sh

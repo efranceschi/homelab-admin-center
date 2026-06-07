@@ -1,0 +1,26 @@
+# ansible-lint config — scoped to this repo's roles and playbooks.
+profile: basic
+
+exclude_paths:
+  - collections/
+  - .venv/
+  - .venv-web/
+  - webpanel/
+  - .git/
+  - inventory/group_vars/all/vault.yml
+
+# yamllint runs as its own CI step; avoid double-reporting YAML formatting.
+# The naming conventions below are cosmetic and would force renaming existing
+# role variables (rippling into templates); excluded to keep the gate focused on
+# correctness (idempotency, deprecations, risky shell/command usage).
+skip_list:
+  - yaml[line-length]
+  - var-naming[no-role-prefix]
+  - name[casing]
+
+# Dynamic inventory and the pct connection plugin are plain Python, not roles.
+kinds:
+  - playbook: "playbooks/*.yml"
+  - tasks: "roles/*/tasks/*.yml"
+  - handlers: "roles/*/handlers/*.yml"
+  - vars: "roles/*/defaults/*.yml"

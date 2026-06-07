@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from .. import system
 from ..auth import create_user, current_user, require_admin, verify_csrf
 from ..db import db_dependency
-from ..jobs import DEFAULT_MAX_CONCURRENT, MAX_MAX_CONCURRENT, manager as job_manager
+from ..jobs import DEFAULT_MAX_CONCURRENT, MAX_MAX_CONCURRENT
+from ..jobs import manager as job_manager
 from ..models import AuditLog, Setting, User
 from ..plugins import registry
 from ..scheduler import manager as scheduler_manager

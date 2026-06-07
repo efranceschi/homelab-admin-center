@@ -1,0 +1,70 @@
+# Central tooling configuration for HomeLab Admin Center (HAC).
+# Covers ruff (lint+format), pytest/coverage, mypy and bandit. The package is
+# not distributed via this file; it only configures the dev/CI toolchain.
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [
+    "collections",
+    ".venv",
+    ".venv-web",
+    ".git",
+    "webpanel/app/static",
+]
+
+[tool.ruff.lint]
+# Focus on correctness signals (pyflakes, bugbear, import order) rather than
+# stylistic modernization (UP), to keep the gate meaningful without churning the
+# existing codebase's idioms.
+select = ["E", "F", "W", "I", "B"]
+# E501: line length is handled by the formatter, not enforced as a lint error.
+# B008: FastAPI idiomatically calls Depends()/Form() in argument defaults.
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may shadow builtins / use intentionally odd patterns.
+"webpanel/tests/*" = ["B", "E402"]
+"tests/*" = ["B", "E402"]
+
+[tool.pytest.ini_options]
+# webpanel is importable as the top-level `app` package; repo root for `tests`.
+pythonpath = ["webpanel", "."]
+testpaths = ["webpanel/tests", "tests"]
+asyncio_mode = "auto"
+# Coverage gate starts at 58% (current ~61%) and is ratcheted up as tests reach
+# the async job-manager, scheduler, and headless executor paths. Target: 85%.
+addopts = """
+    -ra --strict-markers
+    --cov=app --cov=plugins/connection --cov=inventory
+    --cov-report=term-missing --cov-report=xml --cov-report=html
+    --cov-fail-under=58
+"""
+
+[tool.coverage.run]
+branch = true
+omit = [
+    "*/tests/*",
+    "webpanel/app/static/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+warn_unused_ignores = false
+check_untyped_defs = false
+files = ["webpanel/app"]
+exclude = "(collections|\\.venv|\\.venv-web)"
+
+[tool.bandit]
+exclude_dirs = ["collections", ".venv", ".venv-web", "webpanel/tests", "tests"]

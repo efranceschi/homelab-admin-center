@@ -1,5 +1,11 @@
 # lxc-ansible
 
+[![lint](https://github.com/efranceschi/homelab-admin-center/actions/workflows/lint.yml/badge.svg)](https://github.com/efranceschi/homelab-admin-center/actions/workflows/lint.yml)
+[![test](https://github.com/efranceschi/homelab-admin-center/actions/workflows/test.yml/badge.svg)](https://github.com/efranceschi/homelab-admin-center/actions/workflows/test.yml)
+[![sast](https://github.com/efranceschi/homelab-admin-center/actions/workflows/sast.yml/badge.svg)](https://github.com/efranceschi/homelab-admin-center/actions/workflows/sast.yml)
+[![codeql](https://github.com/efranceschi/homelab-admin-center/actions/workflows/codeql.yml/badge.svg)](https://github.com/efranceschi/homelab-admin-center/actions/workflows/codeql.yml)
+[![dast](https://github.com/efranceschi/homelab-admin-center/actions/workflows/dast.yml/badge.svg)](https://github.com/efranceschi/homelab-admin-center/actions/workflows/dast.yml)
+
 Idempotent automation for the LXC containers of a Proxmox node — driven from the host via
 `pct exec` (no SSH bootstrap required). Recurring runs are scheduled by the web panel's own
 scheduler (a child process); the CLI can also be run manually or from any external trigger.
@@ -292,3 +298,36 @@ Promote a tested `main` to production with a fast-forward:
 git checkout prod && git merge --ff-only main && git push origin prod
 git checkout main
 ```
+
+## Testing & quality gates
+
+CI runs on every push to `main` and on pull requests (see the badges above).
+
+| Workflow | Gate | What it runs |
+|----------|------|--------------|
+| `lint`   | blocking | `ruff` (lint + test-code format), `yamllint`, `ansible-lint`, `shellcheck` |
+| `test`   | blocking | `pytest` (unit + integration + security) with `coverage` (`--cov-fail-under`, see `pyproject.toml`) |
+| `sast`   | blocking | `bandit` (medium+), `semgrep`, `pip-audit`, `gitleaks`; `mypy` advisory |
+| `codeql` | blocking | GitHub CodeQL (Python, `security-extended`) on PRs + weekly |
+| `dast`   | non-blocking | Boots the panel, runs OWASP ZAP baseline + Schemathesis; reports uploaded as artifacts |
+
+### Run the suite locally
+
+```bash
+python3 -m venv .venv-test
+. .venv-test/bin/activate
+pip install -r webpanel/requirements-test.txt
+pytest                       # tests + coverage (htmlcov/ + coverage.xml)
+
+# Optional, mirroring the lint/SAST gates:
+pip install ruff yamllint ansible-lint bandit
+ruff check . && ruff format --check webpanel/tests tests
+yamllint -c .yamllint roles playbooks inventory .github
+ansible-lint
+bandit -c pyproject.toml -r webpanel/app plugins inventory --severity-level medium
+```
+
+Tests boot the FastAPI app against a throwaway SQLite DB by overriding the
+`PANEL_*` paths and setting `PANEL_DISABLE_SCHEDULER=1` (no scheduler child is
+spawned). Install the hooks in `.pre-commit-config.yaml` to catch issues before
+pushing: `pre-commit install`.

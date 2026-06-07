@@ -1,0 +1,16 @@
+# gitleaks config — uses the default rule set plus a project allowlist.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "HAC allowlist: example templates, the encrypted vault, and tests."
+paths = [
+    '''.*\.example\.ya?ml$''',
+    '''inventory/group_vars/all/vault\.yml$''',   # ansible-vault ciphertext, not a leak
+    '''.*/tests?/.*''',
+    '''.*\.lock$''',
+]
+# Allow obvious placeholder secrets that appear in docs/examples.
+regexes = [
+    '''(?i)(changeme|example|placeholder|your[-_]?(token|key|secret))''',
+]

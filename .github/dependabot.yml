@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Ansible-framework Python deps (requirements.txt at the repo root).
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+
+  # Web-panel Python deps (requirements-web.txt + requirements-test.txt).
+  - package-ecosystem: "pip"
+    directory: "/webpanel"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python", "webpanel"]
+
+  # GitHub Actions workflow pinned versions.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ci"]
