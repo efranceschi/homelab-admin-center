@@ -96,6 +96,10 @@ class JobManager:
     def queued_count(self) -> int:
         return len(self._queue)
 
+    def queued_jobs(self) -> list[tuple[int, list[int]]]:
+        """(job_id, target server ids) for each pending (not yet started) job."""
+        return [(item[0], list(item[4])) for item in self._queue]
+
     def max_concurrent(self) -> int:
         from .models import Setting
 

@@ -37,14 +37,18 @@ def _all_enabled_plugin_keys(db: Session) -> list[str]:
 
 
 def _live_host_status(db: Session) -> dict[int, dict]:
-    """Per-host transient activity from running jobs.
+    """Per-host transient activity from queued and running jobs.
 
-    Maps server id -> {"activity": "checking"|"applying", "job_id": <id>} for
-    every host targeted by a currently-running job (concurrency-aware), so the
-    hosts table can show what each host is doing and link its status to the live
-    job. Empty when no job is active.
+    Maps server id -> {"activity": "queued"|"checking"|"applying", "job_id": <id>}
+    for every host targeted by a pending or currently-running job
+    (concurrency-aware), so the hosts table can show what each host is doing and
+    link its status to the job. Empty when no job is queued or active.
     """
     out: dict[int, dict] = {}
+    # Queued first; a running job for the same host overrides it below.
+    for jid, server_ids in manager.queued_jobs():
+        for sid in server_ids:
+            out[sid] = {"activity": "queued", "job_id": jid}
     for jid in manager.active_job_ids():
         rt = manager.get_runtime(jid)
         if rt is None or rt.done.is_set():

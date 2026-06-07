@@ -14,6 +14,8 @@
   <span class="st st-warn">
     <span class="spinner-border spinner-border-sm" style="--bs-spinner-width:.7em;--bs-spinner-height:.7em" role="status" aria-hidden="true"></span>
     Applying…</span>
+{%- elif act == 'queued' %}
+  <span class="st st-idle">Queued</span>
 {%- elif st and st.config_status == 'out_of_date' %}
   <span class="st st-warn">Out of date{% if st.pending_changes %} ({{ st.pending_changes }}){% endif %}</span>
 {%- elif st and st.config_status == 'updated' %}
@@ -22,7 +24,9 @@
   <span class="st st-idle">Unknown</span>
 {%- endif %}
 {% if job_id %}</a>{% endif %}
-{% if act %}
+{% if act == 'queued' %}
+  <div class="text-muted small">waiting…</div>
+{% elif act %}
   <div class="text-muted small">in progress…</div>
 {% elif st and st.config_checked_at %}
   <div class="text-muted small">{{ st.config_checked_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
