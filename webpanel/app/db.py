@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import config
 from .models import Base
 
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 
 # Columns added after the initial release, keyed by table. PRAGMA table_info is
 # the source of truth, so applying these is idempotent (only missing columns are
@@ -33,6 +33,10 @@ _ADDITIVE_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("log_text", "TEXT"),
         ("server_ids", "VARCHAR(512)"),
         ("plugin_ids", "VARCHAR(512)"),
+        ("group_ids", "VARCHAR(512)"),
+    ],
+    "schedules": [
+        ("group_ids", "VARCHAR(512)"),
     ],
 }
 

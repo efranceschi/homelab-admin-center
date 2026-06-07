@@ -15,19 +15,24 @@ from . import inventory_builder, runner, vars_builder
 __all__ = ["start_job", "JobBusyError", "recover_selection"]
 
 
-def recover_selection(db: Session, job: Job) -> tuple[list[int], list[str]]:
-    """Reconstruct the (server_ids, plugin_ids) a job was launched with.
+def recover_selection(db: Session, job: Job) -> tuple[list[int], list[str], list[int]]:
+    """Reconstruct the (server_ids, plugin_ids, group_ids) a job was launched with.
 
-    Prefers the selection persisted on the job; for older jobs (pre-migration)
-    it falls back to resolving server names from ``target_ref`` and reverse-
-    mapping ``plugin_tags`` to the plugins whose tags they fully cover.
+    ``server_ids`` is the DIRECT host selection and ``group_ids`` the selected
+    groups (expanded to hosts at run time, so a retry re-resolves current
+    membership). For older jobs (pre-migration) it falls back to resolving server
+    names from ``target_ref`` and reverse-mapping ``plugin_tags`` to the plugins
+    whose tags they fully cover.
     """
     server_ids = [
         int(x) for x in (job.server_ids or "").split(",") if x.strip().isdigit()
     ]
     plugin_ids = [k.strip() for k in (job.plugin_ids or "").split(",") if k.strip()]
+    group_ids = [
+        int(x) for x in (job.group_ids or "").split(",") if x.strip().isdigit()
+    ]
 
-    if not server_ids and job.target_ref:
+    if not server_ids and not group_ids and job.target_ref:
         names = [n.strip() for n in job.target_ref.split(",") if n.strip()]
         if names:
             rows = db.scalars(select(Server).where(Server.name.in_(names))).all()
@@ -39,7 +44,7 @@ def recover_selection(db: Session, job: Job) -> tuple[list[int], list[str]]:
             plugin_ids = [
                 lp.id for lp in registry.all() if lp.tags and set(lp.tags) <= tagset
             ]
-    return server_ids, plugin_ids
+    return server_ids, plugin_ids, group_ids
 
 
 async def start_job(
@@ -49,14 +54,24 @@ async def start_job(
     server_ids: list[int],
     plugin_ids: list[str],
     mode: str,
+    group_ids: list[int] | None = None,
 ) -> Job:
     """Create a job and submit it to the manager.
+
+    ``server_ids`` are directly-selected hosts; ``group_ids`` are groups expanded
+    (recursively, de-duplicated) to their member hosts. The direct selection and
+    the groups are persisted separately so a retry re-resolves group membership.
 
     Never rejects for concurrency: if the running pool is at capacity (or the
     scheduler holds the shared lock) the job is persisted as ``queued`` and the
     manager starts it when a slot frees.
     """
-    servers = list(db.scalars(select(Server).where(Server.id.in_(server_ids))).all())
+    from ..groups import expand_group_hosts
+
+    group_ids = group_ids or []
+    direct_ids = list(server_ids or [])
+    target_ids = set(direct_ids) | expand_group_hosts(db, group_ids)
+    servers = list(db.scalars(select(Server).where(Server.id.in_(target_ids))).all())
     if not servers:
         raise ValueError("no valid target servers selected")
 
@@ -74,8 +89,9 @@ async def start_job(
         target_type="host" if len(servers) == 1 else "group",
         target_ref=",".join(s.name for s in servers),
         plugin_tags=",".join(tags),
-        server_ids=",".join(str(s.id) for s in servers),
+        server_ids=",".join(str(i) for i in direct_ids),
         plugin_ids=",".join(plugin_ids),
+        group_ids=",".join(str(i) for i in group_ids),
         triggered_by=user_id,
         created_at=datetime.now(timezone.utc),
     )

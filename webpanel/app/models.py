@@ -197,6 +197,7 @@ class Job(Base):
     # Original selection, persisted so a failed job can be retried verbatim.
     server_ids: Mapped[str | None] = mapped_column(String(512))  # csv of server ids
     plugin_ids: Mapped[str | None] = mapped_column(String(512))  # csv of plugin keys
+    group_ids: Mapped[str | None] = mapped_column(String(512))  # csv of group ids (pre-expansion)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     return_code: Mapped[int | None] = mapped_column(Integer)
@@ -252,6 +253,8 @@ class Schedule(Base):
     server_ids: Mapped[str] = mapped_column(String(512), default="")
     # Comma-separated plugin keys, or empty = all enabled plugins.
     plugin_ids: Mapped[str] = mapped_column(String(512), default="")
+    # Comma-separated group ids; expanded (recursively) to member hosts at run.
+    group_ids: Mapped[str] = mapped_column(String(512), default="")
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))

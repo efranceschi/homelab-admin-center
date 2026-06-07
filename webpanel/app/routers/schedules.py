@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import current_user, require_admin, verify_csrf
 from ..db import db_dependency
-from ..models import AuditLog, Plugin, Schedule, Server, User
+from ..models import AuditLog, HostGroup, Plugin, Schedule, Server, User
 from ..scheduler import manager as scheduler_manager
 from ..templating import render
 
@@ -24,12 +24,14 @@ def list_schedules(
     schedules = db.scalars(select(Schedule).order_by(Schedule.name)).all()
     servers = db.scalars(select(Server).order_by(Server.name)).all()
     plugins = db.scalars(select(Plugin).order_by(Plugin.order)).all()
+    groups = db.scalars(select(HostGroup).order_by(HostGroup.name)).all()
     return render(
         request,
         "schedules.html",
         schedules=schedules,
         servers=servers,
         plugins=plugins,
+        groups=groups,
         scheduler=scheduler_manager.status(),
     )
 
@@ -52,6 +54,7 @@ async def add_schedule(
         mode=form.get("mode", "apply"),
         server_ids=",".join(form.getlist("servers")),
         plugin_ids=",".join(form.getlist("plugins")),
+        group_ids=",".join(form.getlist("groups")),
         created_by=user.id,
     )
     db.add(sched)

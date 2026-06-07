@@ -13,7 +13,7 @@ from ..ansible_layer.service import JobBusyError, recover_selection, start_job
 from ..auth import current_user, require_admin, verify_csrf
 from ..db import db_dependency
 from ..jobs import manager
-from ..models import Job, Plugin, Server, User
+from ..models import HostGroup, Job, Plugin, Server, User
 from ..plugins import registry
 from ..templating import render
 
@@ -33,11 +33,13 @@ def jobs_home(
         select(Plugin).where(Plugin.enabled.is_(True)).order_by(Plugin.order)
     ).all()
     history = db.scalars(select(Job).order_by(Job.id.desc()).limit(25)).all()
+    groups = db.scalars(select(HostGroup).order_by(HostGroup.name)).all()
     return render(
         request,
         "jobs.html",
         servers=servers,
         plugins=plugins,
+        groups=groups,
         history=history,
         busy=manager.is_busy(),
         running=manager.running_count(),
@@ -69,9 +71,10 @@ async def run_job(
         return render(request, "error.html", message="Only admins can apply changes.")
 
     form = await request.form()
-    server_ids = [int(v) for v in form.getlist("servers")]
+    server_ids = [int(v) for v in form.getlist("servers") if str(v).isdigit()]
+    group_ids = [int(v) for v in form.getlist("groups") if str(v).isdigit()]
     plugin_ids = [v for v in form.getlist("plugins")]
-    if not server_ids or not plugin_ids:
+    if (not server_ids and not group_ids) or not plugin_ids:
         return RedirectResponse("/jobs", status_code=303)
 
     try:
@@ -81,6 +84,7 @@ async def run_job(
             server_ids=server_ids,
             plugin_ids=plugin_ids,
             mode=mode,
+            group_ids=group_ids,
         )
     except JobBusyError as exc:
         return render(request, "error.html", message=str(exc))
@@ -190,8 +194,8 @@ async def retry_job(
     if job.mode == "apply" and user.role != "admin":
         return render(request, "error.html", message="Only admins can apply changes.")
 
-    server_ids, plugin_ids = recover_selection(db, job)
-    if not server_ids or not plugin_ids:
+    server_ids, plugin_ids, group_ids = recover_selection(db, job)
+    if (not server_ids and not group_ids) or not plugin_ids:
         return render(
             request,
             "error.html",
@@ -205,6 +209,7 @@ async def retry_job(
             server_ids=server_ids,
             plugin_ids=plugin_ids,
             mode=job.mode,
+            group_ids=group_ids,
         )
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))
@@ -236,8 +241,8 @@ async def apply_from_job(
             message="Apply is only offered for a successful check run.",
         )
 
-    server_ids, plugin_ids = recover_selection(db, job)
-    if not server_ids or not plugin_ids:
+    server_ids, plugin_ids, group_ids = recover_selection(db, job)
+    if (not server_ids and not group_ids) or not plugin_ids:
         return render(
             request,
             "error.html",
@@ -251,6 +256,7 @@ async def apply_from_job(
             server_ids=server_ids,
             plugin_ids=plugin_ids,
             mode="apply",
+            group_ids=group_ids,
         )
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))

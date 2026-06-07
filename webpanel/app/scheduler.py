@@ -50,8 +50,14 @@ def compute_next_run(sched: Schedule, now: datetime) -> datetime:
 
 
 def _resolve_targets(db, sched: Schedule) -> list[int]:
-    if sched.server_ids.strip():
-        return [int(x) for x in sched.server_ids.split(",") if x.strip().isdigit()]
+    from .groups import expand_group_hosts
+
+    direct = [int(x) for x in sched.server_ids.split(",") if x.strip().isdigit()]
+    group_ids = [
+        int(x) for x in (sched.group_ids or "").split(",") if x.strip().isdigit()
+    ]
+    if direct or group_ids:
+        return list(set(direct) | expand_group_hosts(db, group_ids))
     return [s.id for s in db.scalars(select(Server).where(Server.enabled.is_(True))).all()]
 
 

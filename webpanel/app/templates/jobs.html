@@ -76,7 +76,7 @@
         <div class="row">
           <div class="col-md-6 mb-3">
             <label class="form-label">Hosts</label>
-            <div class="border rounded p-2" style="max-height:240px;overflow:auto">
+            <div class="border rounded p-2" style="max-height:120px;overflow:auto">
               {% for s in servers %}
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" name="servers" value="{{ s.id }}" id="s{{ s.id }}">
@@ -84,6 +84,15 @@
                   {{ s.name }} <span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></label>
               </div>
               {% else %}<span class="text-muted">No enabled hosts.</span>{% endfor %}
+            </div>
+            <label class="form-label mt-2">Groups</label>
+            <div class="border rounded p-2" style="max-height:120px;overflow:auto">
+              {% for g in groups %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="groups" value="{{ g.id }}" id="g{{ g.id }}">
+                <label class="form-check-label mono" for="g{{ g.id }}">{{ icon('box', 12) }} {{ g.name }}</label>
+              </div>
+              {% else %}<span class="text-muted">No groups.</span>{% endfor %}
             </div>
           </div>
           <div class="col-md-6 mb-3">
@@ -99,7 +108,7 @@
             </div>
           </div>
         </div>
-        <p class="text-muted small mb-0">Selecting no hosts or no plugins targets all enabled ones.</p>
+        <p class="text-muted small mb-0">Pick hosts and/or groups (groups expand to their member hosts, recursively) plus at least one plugin.</p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary me-auto" data-bs-dismiss="modal">Cancel</button>
