@@ -9,6 +9,21 @@ from fastapi.templating import Jinja2Templates
 from . import config
 from .auth import get_csrf_token
 
+
+def _static_version() -> str:
+    """Cache-busting token for the bundled CSS/JS: the newest mtime among the
+    panel's own static assets. Changes whenever we edit them (and the panel is
+    restarted), so browsers fetch the new file instead of a stale cached copy."""
+    import os
+
+    newest = 0.0
+    for sub in ("css/panel.css", "js/sse.js"):
+        try:
+            newest = max(newest, (config.APP_DIR / "static" / sub).stat().st_mtime)
+        except OSError:
+            pass
+    return str(int(newest)) or config.APP_VERSION
+
 templates = Jinja2Templates(directory=str(config.APP_DIR / "templates"))
 templates.env.globals["app_name"] = config.APP_NAME       # long: HomeLab Admin Center
 templates.env.globals["app_short"] = config.APP_SHORT     # short: HAC
@@ -22,6 +37,8 @@ templates.env.globals["instance_name"] = config.APP_NAME  # overridden at startu
 # Periodic auto-refresh of volatile views (seconds; 0 = off). Overridden at
 # startup from the 'auto_refresh_seconds' setting. Single worker => global state.
 templates.env.globals["auto_refresh_seconds"] = 180
+# Cache-busting query appended to bundled CSS/JS URLs (see _static_version).
+templates.env.globals["static_version"] = _static_version()
 
 
 def set_instance_name(value: str | None) -> None:
