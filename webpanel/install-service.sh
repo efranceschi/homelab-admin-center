@@ -115,11 +115,9 @@ sed -e "s#/opt/hac/webpanel#${PANEL_DIR}#g" \
     -e "s#WorkingDirectory=/opt/hac#WorkingDirectory=${ANSIBLE_ROOT}#g" \
     "${UNIT_SRC}" > "${RENDERED}"
 
-UNIT_CHANGED=0
 if [[ ! -f "${UNIT_DST}" ]] || ! cmp -s "${RENDERED}" "${UNIT_DST}"; then
     say "installing unit -> ${UNIT_DST}"
     install -m 0644 "${RENDERED}" "${UNIT_DST}"
-    UNIT_CHANGED=1
     systemctl daemon-reload
 else
     say "unit already up to date -> ${UNIT_DST}"
