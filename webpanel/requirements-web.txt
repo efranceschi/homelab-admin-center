@@ -2,7 +2,7 @@
 # Kept SEPARATE from the project's requirements.txt so the Ansible cron venv is
 # never disturbed. ansible-core is reused from the project's own .venv.
 fastapi>=0.110
-uvicorn[standard]>=0.27
+uvicorn[standard]>=0.49.0
 jinja2>=3.1
 python-multipart>=0.0.9
 itsdangerous>=2.1
