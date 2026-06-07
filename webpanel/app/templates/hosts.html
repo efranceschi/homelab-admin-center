@@ -41,43 +41,27 @@
     </div>
 
     {# ---- Filter toolbar -------------------------------------------------- #}
-    {# Objective, data-backed criteria: free-text (name/address/VMID/node),
-       connection-type toggles ("sliders"), config drift state, and enabled
-       state. All client-side — no round-trip, filters the rendered rows. #}
-    {% set conn_types = servers | map(attribute='connection_type') | unique | list %}
-    {% set conn_labels = {'local': 'Local', 'ssh': 'SSH host', 'proxmox': 'Proxmox LXC'} %}
+    {# Two criteria only: free-text search by name, and membership of a host
+       group. All client-side — no round-trip, filters the rendered rows. #}
+    {% set seen_gids = [] %}
+    {% set group_opts = [] %}
+    {% for s in servers %}{% for g in s.groups %}{% if g.id not in seen_gids %}
+      {% set _ = seen_gids.append(g.id) %}{% set _ = group_opts.append(g) %}
+    {% endif %}{% endfor %}{% endfor %}
     {% if servers %}
     <div class="p-2 px-3 border-bottom bg-body-tertiary" id="host-filters">
       <div class="row g-2 align-items-center">
-        <div class="col-12 col-xl-4">
+        <div class="col-12 col-sm">
           <input type="search" id="hf-search" class="form-control form-control-sm"
-                 placeholder="Filter by name, user@address, VMID or node…" autocomplete="off">
+                 placeholder="Filter by name…" autocomplete="off">
         </div>
-        <div class="col-auto">
-          <div class="btn-group btn-group-sm" role="group" aria-label="Config state">
-            <input type="radio" class="btn-check" name="hf-state" id="hfs-all" value="all" checked>
-            <label class="btn btn-outline-secondary" for="hfs-all">All states</label>
-            <input type="radio" class="btn-check" name="hf-state" id="hfs-updated" value="updated">
-            <label class="btn btn-outline-success" for="hfs-updated">Updated</label>
-            <input type="radio" class="btn-check" name="hf-state" id="hfs-ood" value="out_of_date">
-            <label class="btn btn-outline-warning" for="hfs-ood">Out of date</label>
-            <input type="radio" class="btn-check" name="hf-state" id="hfs-unknown" value="unknown">
-            <label class="btn btn-outline-secondary" for="hfs-unknown">Unknown</label>
-          </div>
-        </div>
-        {# Connection-type sliders — one per type actually present in the table. #}
-        <div class="col-auto d-flex align-items-center gap-3 flex-wrap">
-          {% for t in conn_types %}
-          <div class="form-check form-switch mb-0">
-            <input class="form-check-input hf-conn" type="checkbox" role="switch"
-                   id="hf-conn-{{ t }}" value="{{ t }}" checked>
-            <label class="form-check-label small text-nowrap" for="hf-conn-{{ t }}">{{ conn_labels.get(t, t) }}</label>
-          </div>
-          {% endfor %}
-          <div class="form-check form-switch mb-0">
-            <input class="form-check-input" type="checkbox" role="switch" id="hf-enabled-only">
-            <label class="form-check-label small text-nowrap" for="hf-enabled-only">Enabled only</label>
-          </div>
+        <div class="col-12 col-sm-auto">
+          <select id="hf-group" class="form-select form-select-sm" aria-label="Filter by group">
+            <option value="">All groups</option>
+            {% for g in group_opts | sort(attribute='name') %}
+            <option value="{{ g.id }}">{{ g.name }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-auto ms-auto d-flex align-items-center gap-2">
           <span class="text-muted small" id="hf-count"></span>
@@ -93,10 +77,8 @@
       {% for s in servers %}
         {% set st = states.get(s.id) %}
         <tr class="host-row"
-            data-search="{{ (s.name ~ ' ' ~ (s.ssh_user or '') ~ ' ' ~ (s.address or '') ~ ' ' ~ (s.proxmox_vmid or '') ~ ' ' ~ (s.proxmox_node or ''))|lower }}"
-            data-conn="{{ s.connection_type }}"
-            data-state="{{ st.config_status if st and st.config_status in ['updated', 'out_of_date'] else 'unknown' }}"
-            data-enabled="{{ '1' if s.enabled else '0' }}">
+            data-search="{{ s.name|lower }}"
+            data-groups="{{ ' ' ~ (s.groups | map(attribute='id') | join(' ')) ~ ' ' }}">
           <td>{{ s.name }}</td>
           <td><span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></td>
           <td>
@@ -332,34 +314,25 @@
     });
   })();
 
-  // Host filters: client-side, AND-combined across search text, connection-type
-  // switches, config-drift state, and the enabled-only switch. Updates the match
-  // counter and an empty-state row; no server round-trip.
+  // Host filters: client-side, AND-combined across name search and group
+  // membership. Updates the match counter and an empty-state row; no round-trip.
   (function () {
     const wrap = document.getElementById('host-filters');
     if (!wrap) return;
     const rows = Array.from(document.querySelectorAll('#tab-hosts tr.host-row'));
     const search = document.getElementById('hf-search');
-    const enabledOnly = document.getElementById('hf-enabled-only');
-    const connBoxes = Array.from(wrap.querySelectorAll('.hf-conn'));
+    const group = document.getElementById('hf-group');
     const empty = document.getElementById('hf-empty');
     const count = document.getElementById('hf-count');
 
-    const activeState = () =>
-      (wrap.querySelector('input[name="hf-state"]:checked') || {}).value || 'all';
-
     function apply() {
       const q = search.value.trim().toLowerCase();
-      const state = activeState();
-      const conns = new Set(connBoxes.filter(c => c.checked).map(c => c.value));
-      const enOnly = enabledOnly.checked;
+      const gid = group.value;
       let shown = 0;
       rows.forEach(row => {
         const ok =
           (!q || row.dataset.search.includes(q)) &&
-          conns.has(row.dataset.conn) &&
-          (state === 'all' || row.dataset.state === state) &&
-          (!enOnly || row.dataset.enabled === '1');
+          (!gid || row.dataset.groups.includes(' ' + gid + ' '));
         row.hidden = !ok;
         if (ok) shown++;
       });
@@ -371,10 +344,7 @@
     wrap.addEventListener('change', apply);
     document.getElementById('hf-reset').addEventListener('click', () => {
       search.value = '';
-      connBoxes.forEach(c => { c.checked = true; });
-      enabledOnly.checked = false;
-      const all = document.getElementById('hfs-all');
-      if (all) all.checked = true;
+      group.value = '';
       apply();
     });
     apply();
@@ -382,12 +352,10 @@
 
   // Live host status: poll /hosts/states so the Config-state column shows
   // Checking…/Applying… while a job runs, and settles to the result when it
-  // finishes. Fast cadence while busy, slow when idle. Filters are re-applied
-  // after each update so a host that changes state stays correctly filtered.
+  // finishes. Fast cadence while busy, slow when idle.
   (function () {
     const cells = Array.from(document.querySelectorAll('.host-state-cell'));
     if (!cells.length) return;
-    const search = document.getElementById('hf-search');
     const BUSY_MS = 2000, IDLE_MS = 10000;
 
     async function poll() {
@@ -400,11 +368,7 @@
           cells.forEach(cell => {
             const sid = cell.dataset.sid;
             if (data.cells && data.cells[sid] != null) cell.innerHTML = data.cells[sid];
-            const row = cell.closest('tr');
-            if (row && data.states && data.states[sid]) row.dataset.state = data.states[sid];
           });
-          // Re-run the filters so newly-settled states respect the active filter.
-          if (search) search.dispatchEvent(new Event('input', { bubbles: true }));
         }
       } catch (e) { /* transient; retry on next tick */ }
       setTimeout(poll, busy ? BUSY_MS : IDLE_MS);
