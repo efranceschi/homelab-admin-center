@@ -40,6 +40,9 @@ def jobs_home(
         plugins=plugins,
         history=history,
         busy=manager.is_busy(),
+        running=manager.running_count(),
+        queued=manager.queued_count(),
+        max_concurrent=manager.max_concurrent(),
     )
 
 
@@ -106,7 +109,7 @@ def job_detail(
     # Fall back to the persisted copy when the run dir has been cleaned up.
     if not log_text and job.log_text:
         log_text = job.log_text
-    live = manager.active is not None and manager.active.job_id == job_id
+    live = manager.get_runtime(job_id) is not None
     return render(
         request,
         "job_detail.html",
@@ -130,8 +133,8 @@ async def job_stream(
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
     }
-    rt = manager.active
-    if rt is None or rt.job_id != job_id:
+    rt = manager.get_runtime(job_id)
+    if rt is None:
         async def _empty():
             yield "event: done\ndata: not-live\n\n"
 

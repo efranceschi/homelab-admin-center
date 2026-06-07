@@ -20,13 +20,15 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from . import config
+from . import config, housekeeping
 from .ansible_layer import headless
 from .db import init_engine, session_scope
 from .models import Plugin, Schedule, Server
 from .plugins import registry
 
 POLL_SECONDS = 30
+# How often to run log/run-dir housekeeping (independent of any schedule).
+HOUSEKEEP_SECONDS = 3600
 PIDFILE = config.RUN_DIRS / "scheduler.pid"
 
 
@@ -75,11 +77,21 @@ def run_scheduler() -> None:
     signal.signal(signal.SIGTERM, _term)
     signal.signal(signal.SIGINT, _term)
 
+    last_housekeep = 0.0  # 0 => run once on the first iteration
     while not running["stop"]:
         try:
             _tick()
         except Exception as exc:  # never let the loop die
             print(f"[scheduler] tick error: {exc}", flush=True)
+        now_mono = time.monotonic()
+        if now_mono - last_housekeep >= HOUSEKEEP_SECONDS:
+            last_housekeep = now_mono
+            try:
+                stats = housekeeping.run_housekeeping()
+                if stats["run_dirs_removed"] or stats["logs_cleared"]:
+                    print(f"[scheduler] housekeeping {stats}", flush=True)
+            except Exception as exc:
+                print(f"[scheduler] housekeeping error: {exc}", flush=True)
         for _ in range(POLL_SECONDS):
             if running["stop"]:
                 break

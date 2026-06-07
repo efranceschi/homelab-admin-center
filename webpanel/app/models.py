@@ -165,10 +165,16 @@ class Job(Base):
     target_type: Mapped[str] = mapped_column(String(16), default="host")  # all|group|host
     target_ref: Mapped[str | None] = mapped_column(String(255))
     plugin_tags: Mapped[str | None] = mapped_column(String(255))
+    # Original selection, persisted so a failed job can be retried verbatim.
+    server_ids: Mapped[str | None] = mapped_column(String(512))  # csv of server ids
+    plugin_ids: Mapped[str | None] = mapped_column(String(512))  # csv of plugin keys
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     return_code: Mapped[int | None] = mapped_column(Integer)
     log_path: Mapped[str | None] = mapped_column(Text)
+    # Full captured output, persisted on completion so the log survives the
+    # rotation/housekeeping of the on-disk run directory. Cleared for old jobs.
+    log_text: Mapped[str | None] = mapped_column(Text)
     pid: Mapped[int | None] = mapped_column(Integer)
     triggered_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -186,6 +192,10 @@ class HostState(Base):
     reboot_required: Mapped[bool] = mapped_column(Boolean, default=False)
     facts_json: Mapped[str] = mapped_column(Text, default="{}")
     plugin_state_json: Mapped[str] = mapped_column(Text, default="{}")
+    # Configuration drift state, derived from --check runs (NULL = unknown).
+    config_status: Mapped[str | None] = mapped_column(String(16))  # updated|out_of_date|unknown
+    config_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pending_changes: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )

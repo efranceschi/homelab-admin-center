@@ -2,12 +2,17 @@
    it via {% block nav_active %}<key>{% endblock %}. Defined here once. #}
 {% set active_nav %}{% block nav_active %}{% endblock %}{% endset %}
 {% set active_nav = active_nav|trim %}
+{# Per-page opt-in for periodic auto-refresh: a page sets {% block autorefresh %}1{% endblock %}.
+   The interval comes from the auto_refresh_seconds global (Settings; 0 = off). #}
+{% set page_autorefresh %}{% block autorefresh %}{% endblock %}{% endset %}
+{% set page_autorefresh = page_autorefresh|trim %}
 <!doctype html>
 <html lang="en" data-theme="dark" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
   {# Apply the saved theme BEFORE the stylesheet loads to avoid a flash of the
      wrong theme (FOUC). Mirrors the choice onto Bootstrap's own data-bs-theme. #}
   <script>
@@ -23,8 +28,8 @@
   <script src="/static/js/sse.js" defer></script>
   <script src="/static/js/bootstrap.bundle.min.js" defer></script>
 </head>
-<body>
-{% from "_macros.html" import icon %}
+<body{% if page_autorefresh == '1' and auto_refresh_seconds %} data-autorefresh="{{ auto_refresh_seconds }}"{% endif %}>
+{% from "_macros.html" import icon, app_logo %}
 {% if current_username %}
 {# Theme toggle + logout, shared by sidebar footer and mobile top bar. #}
 {% macro theme_toggle() %}
@@ -36,10 +41,8 @@
 <div class="app-shell">
   {# ---- Sidebar : flattened, grouped navigation (replaces nav dropdowns) -- #}
   <aside class="sidebar" id="sidebar">
-    <a class="sidebar-brand" href="/dashboard" title="{{ instance_name or app_name }} @ {{ hostname }}">
-      <span class="brand-prompt">&gt;_</span>
-      <span class="brand-name">{{ instance_name or app_name }}</span>
-      <span class="brand-host">{{ hostname }}</span>
+    <a class="sidebar-brand" href="/dashboard" title="{{ app_name }}">
+      {{ app_logo(26) }}
     </a>
 
     <nav class="sidebar-nav">
@@ -93,11 +96,14 @@
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
   <div class="app-main">
-    {# ---- Mobile-only top bar (hamburger + brand) ---- #}
+    {# ---- Top bar: hamburger (mobile) on the left; instance identity on the
+         right, stacked over two lines (instance name + hostname badge). ---- #}
     <header class="topbar">
-      <button type="button" class="icon-btn" id="sidebar-open" aria-label="Open menu">{{ icon('menu') }}</button>
-      <span class="tb-brand"><span class="brand-prompt">&gt;_</span> {{ instance_name or app_name }}</span>
-      <span class="ms-auto">{{ theme_toggle() }}</span>
+      <button type="button" class="icon-btn tb-burger" id="sidebar-open" aria-label="Open menu">{{ icon('menu') }}</button>
+      <div class="topbar-identity">
+        <span class="ti-name">{{ instance_name or app_name }}</span>
+        <span class="ti-host">{{ icon('server', 11) }} {{ hostname }}</span>
+      </div>
     </header>
 
     <main class="app-content">
@@ -173,6 +179,26 @@ document.addEventListener('click', function (ev) {
   const backdrop = document.getElementById('sidebar-backdrop');
   if (open) open.addEventListener('click', () => document.body.classList.add('sidebar-open'));
   if (backdrop) backdrop.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+})();
+
+// Auto-refresh of volatile views (dashboard/jobs/hosts/schedules). Interval set
+// per-page via body[data-autorefresh] (seconds, from Settings). To avoid yanking
+// the page out from under the user, a tick is skipped (and re-armed) when a modal
+// is open or a form field is focused.
+(function () {
+  const secs = parseInt(document.body.dataset.autorefresh || '0', 10);
+  if (!secs || secs < 10) return;
+  const ms = secs * 1000;
+  function busy() {
+    if (document.querySelector('.modal.show')) return true;
+    const a = document.activeElement;
+    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  function tick() {
+    if (document.hidden || busy()) { setTimeout(tick, 15000); return; }
+    location.reload();
+  }
+  setTimeout(tick, ms);
 })();
 </script>
 {% else %}

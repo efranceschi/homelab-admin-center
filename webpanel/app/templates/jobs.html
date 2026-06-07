@@ -1,24 +1,32 @@
 {% extends "base.html" %}
 {% from "_macros.html" import mode_badge, icon %}
 {% block nav_active %}jobs{% endblock %}
+{% block autorefresh %}1{% endblock %}
 {% block title %}Run · {{ app_name }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div class="page-head"><span class="ph-icon">{{ icon('terminal', 20) }}</span><h4>Run Ansible</h4></div>
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#run-modal" {% if busy %}disabled{% endif %}>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#run-modal">
     <span class="btn-ico">{{ icon('play', 14) }}</span> New run</button>
 </div>
 
-{% if busy %}<div class="alert alert-warning d-flex align-items-center gap-2">{{ icon('activity') }} A job is currently running. Wait for it to finish.</div>{% endif %}
+{% if running or queued %}
+<div class="alert alert-info d-flex align-items-center gap-2">{{ icon('activity') }}
+  <span><b>{{ running }}</b> running (max {{ max_concurrent }}){% if queued %} · <b>{{ queued }}</b> queued{% endif %}.
+  New runs start when a slot is free — set the limit in
+  {% if current_role == 'admin' %}<a href="/settings#runtime">Settings</a>{% else %}Settings{% endif %}.</span>
+</div>
+{% endif %}
 
 <div class="card"><div class="card-header">History</div>
 <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-  <thead><tr><th>#</th><th>Mode</th><th>Tags</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+  <thead><tr><th>#</th><th>Mode</th><th>Target</th><th>Tags</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
   <tbody>
   {% for j in history %}
     <tr>
       <td><a href="/jobs/{{ j.id }}" class="cell-id">#{{ j.id }}</a></td>
       <td>{{ mode_badge(j.mode) }}</td>
+      <td class="small mono text-code">{{ j.target_ref or '—' }}</td>
       <td class="small mono">{{ j.plugin_tags }}</td>
       <td>
         {% if j.status == 'success' %}<span class="st st-ok">{{ icon('check', 12) }} success</span>
@@ -30,25 +38,25 @@
       <td class="text-end">
         {% if j.status in ['failed', 'cancelled'] and (j.mode != 'apply' or current_role == 'admin') %}
         <button type="button" class="btn btn-outline-primary btn-sm py-0"
-                data-action="/jobs/{{ j.id }}/retry" {% if busy %}disabled{% endif %}
+                data-action="/jobs/{{ j.id }}/retry"
                 data-title="Retry job" data-ok="Retry" data-ok-class="btn-primary"
                 data-confirm="Re-run job #{{ j.id }} ({{ j.mode }}) on {{ j.target_ref }}?">Retry</button>
         {% elif j.status == 'success' and (j.mode != 'apply' or current_role == 'admin') %}
         {% if j.mode == 'check' and current_role == 'admin' %}
         {# Promote a successful dry run into a separate apply job. #}
         <button type="button" class="btn btn-warning btn-sm py-0"
-                data-action="/jobs/{{ j.id }}/apply" {% if busy %}disabled{% endif %}
+                data-action="/jobs/{{ j.id }}/apply"
                 data-title="Apply changes" data-ok="Apply" data-ok-class="btn-warning"
                 data-confirm="Apply the changes previewed by check #{{ j.id }} on {{ j.target_ref }}? This starts a new apply job.">Apply</button>
         {% endif %}
         <button type="button" class="btn btn-outline-primary btn-sm py-0"
-                data-action="/jobs/{{ j.id }}/retry" {% if busy %}disabled{% endif %}
+                data-action="/jobs/{{ j.id }}/retry"
                 data-title="Re-run job" data-ok="Re-run" data-ok-class="btn-primary"
                 data-confirm="Re-run job #{{ j.id }} ({{ j.mode }}) on {{ j.target_ref }}?">Re-run</button>
         {% endif %}
       </td>
     </tr>
-  {% else %}<tr><td colspan="5" class="text-muted">No history.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="6" class="text-muted">No history.</td></tr>{% endfor %}
   </tbody>
 </table></div></div>
 
@@ -93,10 +101,10 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary me-auto" data-bs-dismiss="modal">Cancel</button>
         {# Apply is the primary action; dry run kept as a secondary option. #}
-        <button class="btn btn-outline-primary" name="mode" value="check" {% if busy %}disabled{% endif %}>
+        <button class="btn btn-outline-primary" name="mode" value="check">
           <span class="btn-ico">{{ icon('search', 14) }}</span> Dry run (--check --diff)</button>
         {% if current_role == 'admin' %}
-        <button class="btn btn-warning" name="mode" value="apply" {% if busy %}disabled{% endif %}
+        <button class="btn btn-warning" name="mode" value="apply"
                 onclick="return confirm('Apply changes to the selected hosts?')">
           <span class="btn-ico">{{ icon('play', 14) }}</span> Apply</button>
         {% else %}

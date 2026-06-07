@@ -16,6 +16,7 @@ APP_NAME = "HomeLab Admin Center"
 APP_SHORT = "HAC"
 APP_SLUG = "hac"
 APP_VERSION = "0.1.0"
+APP_REPO_URL = "https://github.com/efranceschi/homelab-admin-center"
 
 # webpanel/app/config.py -> webpanel/app -> webpanel -> <ANSIBLE_ROOT>
 APP_DIR = Path(__file__).resolve().parent
@@ -30,12 +31,12 @@ INVENTORY_DIR = ANSIBLE_ROOT / "inventory"
 WEBPANEL_PLAYBOOK = ANSIBLE_ROOT / "playbooks" / "webpanel.yml"
 ANSIBLE_PLAYBOOK_BIN = ANSIBLE_ROOT / ".venv" / "bin" / "ansible-playbook"
 VAULT_PASSWORD_FILE = Path(
-    os.environ.get("PANEL_VAULT_PASSWORD_FILE", "/etc/lxc-ansible/vault-pass")
+    os.environ.get("PANEL_VAULT_PASSWORD_FILE", "/etc/hac/vault-pass")
 )
 
 # Shared advisory lock — the SAME file run.sh uses, so panel runs and the daily
 # cron run can never overlap on the same containers.
-RUN_LOCK_FILE = Path(os.environ.get("PANEL_RUN_LOCK", "/run/lxc-ansible.lock"))
+RUN_LOCK_FILE = Path(os.environ.get("PANEL_RUN_LOCK", "/run/hac.lock"))
 
 # Panel's own plugin directory (auto-discovered at startup).
 PLUGINS_DIR = PANEL_DIR / "plugins"
@@ -45,22 +46,35 @@ RUN_DIRS = PANEL_DIR / "run_dirs"
 
 # Persistent state. Defaults live under /var/lib so the DB is outside the git
 # tree; falls back to the panel dir for unprivileged/dev runs.
-_DEFAULT_STATE_DIR = "/var/lib/lxc-ansible"
+_DEFAULT_STATE_DIR = "/var/lib/hac"
 STATE_DIR = Path(os.environ.get("PANEL_STATE_DIR", _DEFAULT_STATE_DIR))
 DB_PATH = Path(os.environ.get("PANEL_DB_PATH", str(STATE_DIR / "panel.sqlite3")))
 
 # Master key for secrets-at-rest (Fernet). Mirrors the vault-pass trust model.
 MASTER_KEY_PATH = Path(
-    os.environ.get("PANEL_MASTER_KEY", "/etc/lxc-ansible/panel.key")
+    os.environ.get("PANEL_MASTER_KEY", "/etc/hac/panel.key")
 )
 
 # Session signing secret (persisted next to the master key).
 SESSION_SECRET_PATH = Path(
-    os.environ.get("PANEL_SESSION_SECRET", "/etc/lxc-ansible/panel.session")
+    os.environ.get("PANEL_SESSION_SECRET", "/etc/hac/panel.session")
 )
 
 # Log retention for job logs (mirrors run.sh keeping the 30 most recent).
 JOB_LOG_RETENTION = int(os.environ.get("PANEL_JOB_LOG_RETENTION", "30"))
+
+
+def _envflag(name: str, default: bool = False) -> bool:
+    return os.environ.get(name, "1" if default else "0").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+# Mark the session cookie Secure (HTTPS-only). Enable when the panel is fronted
+# by a TLS-terminating reverse proxy (uvicorn must run with --proxy-headers so
+# the original https scheme is seen). Leave off for plain-http/direct access,
+# otherwise the browser drops the cookie and login silently fails.
+HTTPS_ONLY = _envflag("PANEL_HTTPS_ONLY", default=False)
 
 
 def ensure_runtime_dirs() -> None:

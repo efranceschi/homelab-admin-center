@@ -25,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/efranceschi/homelab-admin-center/pr
 ```
 
 This pulls the **production branch (`prod`)**, installs prerequisites, clones the project
-to `/opt/lxc-ansible`, seeds config from the bundled examples, and installs + starts the
+to `/opt/hac`, seeds config from the bundled examples, and installs + starts the
 **`hac`** systemd service. When it finishes, open `http://<host>:8910` and create the first
 admin account.
 
@@ -68,7 +68,7 @@ panel itself via **Administration → Update & restart**.)
   which shares the same flock so panel, scheduler, and CLI runs never overlap.
 - **Secrets** — non-secret variables in `inventory/group_vars/all/main.yml`; encrypted
   secrets in `inventory/group_vars/all/vault.yml` (Ansible Vault). The vault password lives
-  at `/etc/lxc-ansible/vault-pass` (mode `0600`, never versioned).
+  at `/etc/hac/vault-pass` (mode `0600`, never versioned).
 
 ---
 
@@ -76,7 +76,7 @@ panel itself via **Administration → Update & restart**.)
 
 - A Proxmox VE node (the project runs **on the host** as `root`, because it shells out to `pct`).
 - Python 3 (`python3 -m venv`).
-- The Ansible Vault password file at `/etc/lxc-ansible/vault-pass` (only needed if you use the
+- The Ansible Vault password file at `/etc/hac/vault-pass` (only needed if you use the
   encrypted `vault.yml`).
 
 ---
@@ -85,16 +85,16 @@ panel itself via **Administration → Update & restart**.)
 
 ```bash
 # Apply all roles to every running container (creates/updates the venv as needed)
-/opt/lxc-ansible/run.sh
+/opt/hac/run.sh
 
 # Dry-run with diff (no changes applied)
-/opt/lxc-ansible/run.sh --check --diff
+/opt/hac/run.sh --check --diff
 
 # Only a subset of functionalities
-/opt/lxc-ansible/run.sh --tags timezone,apt
+/opt/hac/run.sh --tags timezone,apt
 
 # Ad-hoc
-cd /opt/lxc-ansible && source .venv/bin/activate
+cd /opt/hac && source .venv/bin/activate
 ansible all -m ping
 ```
 
@@ -136,14 +136,14 @@ it never edits `ansible.cfg`, `run.sh`, `site.yml`, the roles, the connection pl
 Foreground (development):
 
 ```bash
-cd /opt/lxc-ansible/webpanel
+cd /opt/hac/webpanel
 ./run-panel.sh        # creates webpanel/.venv-web, installs requirements-web.txt, starts uvicorn
 ```
 
 As a managed service (production), install the `hac` systemd unit:
 
 ```bash
-cd /opt/lxc-ansible/webpanel
+cd /opt/hac/webpanel
 sudo ./install-service.sh     # installs, enables, and starts hac.service
 systemctl status hac
 journalctl -u hac -f          # live logs
@@ -155,6 +155,41 @@ admin account.
 > The panel uses its **own** virtualenv (`webpanel/.venv-web`) and `requirements-web.txt`,
 > separate from the Ansible `requirements.txt`, so it never disturbs the automation venv. It
 > invokes the project's existing `ansible-playbook` (from `.venv`) for actual runs.
+
+### Behind a reverse proxy (TLS)
+
+To serve the panel over HTTPS from a TLS-terminating reverse proxy at its own
+hostname (e.g. `https://hac.example.com/`), set two environment variables (in
+`systemctl edit hac`, or the shell when running `./run-panel.sh`):
+
+| Variable | Value | Purpose |
+|----------|-------|---------|
+| `PANEL_HTTPS_ONLY` | `1` | Marks the session cookie `Secure` so it's only sent over HTTPS. |
+| `PANEL_FORWARDED_ALLOW_IPS` | proxy IP, list, or `*` | Trust `X-Forwarded-Proto`/`X-Forwarded-For` from the proxy so the app sees the real client IP and the original `https` scheme. Defaults to `127.0.0.1` (proxy on the same host). |
+
+`run-panel.sh` already launches uvicorn with `--proxy-headers`, so the original
+scheme/client IP are honoured for whichever IPs you trust above. Example Nginx
+server block:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name hac.example.com;
+    # ssl_certificate / ssl_certificate_key ...
+
+    location / {
+        proxy_pass http://127.0.0.1:8910;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+> Only enable `PANEL_HTTPS_ONLY=1` once the panel is actually reached over HTTPS —
+> over plain `http://<host>:8910` the browser would drop the `Secure` cookie and
+> login would silently fail. This setup assumes the proxy serves the panel at the
+> **root** path; subpath mounting (`/hac/`) would need additional URL-prefix work.
 
 ### Connection types
 
@@ -188,7 +223,7 @@ how to edit credentials — are documented in [`README.pt.md`](./README.pt.md).
 To edit credentials/parameters:
 
 ```bash
-cd /opt/lxc-ansible && source .venv/bin/activate
+cd /opt/hac && source .venv/bin/activate
 ansible-vault edit inventory/group_vars/all/vault.yml   # URI, base DN, bind DN/password
 # object classes / attributes / TLS mode -> inventory/group_vars/all/main.yml
 ./run.sh --check --diff --tags auth                     # validate
@@ -204,7 +239,7 @@ ansible-vault edit inventory/group_vars/all/vault.yml   # URI, base DN, bind DN/
   proxy, and do not expose it to untrusted networks. Override the bind with the
   `PANEL_HOST`/`PANEL_PORT` env vars (or `systemctl edit hac`).
 - `inventory/group_vars/all/vault.yml` is safe to commit (encrypted). The vault password
-  (`/etc/lxc-ansible/vault-pass`) and the panel master key (`/etc/lxc-ansible/panel.key`) must
+  (`/etc/hac/vault-pass`) and the panel master key (`/etc/hac/panel.key`) must
   **never** be versioned — both are in `.gitignore`.
 - The panel stores SSH keys, Proxmox tokens, and the vault password encrypted with a
   host-local master key.

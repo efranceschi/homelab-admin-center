@@ -23,6 +23,7 @@
   'trash': '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   'alert': '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
   'search': '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  'chevron': '<polyline points="9 18 15 12 9 6"/>',
   'cpu': '<rect x="6" y="6" width="12" height="12" rx="1"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>',
   'activity': '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
   'power': '<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/>',
@@ -34,6 +35,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24"
      fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
      aria-hidden="true" focusable="false">{{ paths.get(name, '')|safe }}</svg>
+{%- endmacro %}
+
+{# Application logo — "Deep Stack" mark + wordmark. The mark (rounded terminal
+   tile with an amber >_ prompt + cyan stack rails) uses fixed brand accents so
+   it reads on either theme; the wordmark uses currentColor so it follows the
+   surrounding text colour. Used in the sidebar brand. #}
+{% macro app_logo(height=26) -%}
+<svg class="app-logo" viewBox="0 0 104 28" height="{{ height }}" role="img" aria-label="{{ app_short }}">
+  <rect x="2" y="3" width="22" height="22" rx="5" fill="none" stroke="var(--accent-secondary)" stroke-width="2"/>
+  <path d="M8 11.5l3.5 2.5L8 16.5" fill="none" stroke="var(--accent-primary)" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="13.5" y1="17" x2="18" y2="17" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round"/>
+  <text x="32" y="20" font-family="'JetBrains Mono', monospace" font-size="16" font-weight="700"
+        letter-spacing="1.5" fill="currentColor">{{ app_short }}</text>
+</svg>
 {%- endmacro %}
 
 {# Job run-mode badge: makes it unmistakable whether a job is a dry run

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icon %}
 {% block nav_active %}hosts{% endblock %}
+{% block autorefresh %}1{% endblock %}
 {% block title %}Hosts · {{ app_name }}{% endblock %}
 {% block content %}
 <div class="page-head mb-3"><span class="ph-icon">{{ icon('server', 20) }}</span><h4>Infrastructure</h4></div>

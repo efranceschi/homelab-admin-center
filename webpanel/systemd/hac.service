@@ -7,22 +7,30 @@ Wants=network-online.target
 [Service]
 Type=simple
 # Must run as root on the Proxmox node: the panel shells out to `pct` and reads
-# the Ansible vault password file (/etc/lxc-ansible/vault-pass, mode 0600).
+# the Ansible vault password file (/etc/hac/vault-pass, mode 0600).
 User=root
-WorkingDirectory=/opt/lxc-ansible/webpanel
+WorkingDirectory=/opt/hac/webpanel
 # Bind address/port (override with `systemctl edit hac` if needed).
 # Binds to all interfaces by default; restrict via firewall or a reverse proxy.
 Environment=PANEL_HOST=0.0.0.0
 Environment=PANEL_PORT=8910
+# --- Reverse proxy (TLS termination) -------------------------------------
+# Uncomment when fronting the panel with an https reverse proxy (Nginx,
+# Traefik, NPM, Caddy...). PANEL_HTTPS_ONLY=1 marks the session cookie Secure;
+# PANEL_FORWARDED_ALLOW_IPS lists the proxy IP(s) whose X-Forwarded-* headers
+# are trusted ("*" if the proxy runs on another host). Prefer `systemctl edit
+# hac` so local changes survive updates.
+#Environment=PANEL_HTTPS_ONLY=1
+#Environment=PANEL_FORWARDED_ALLOW_IPS=127.0.0.1
 # run-panel.sh creates/updates the dedicated venv then exec's uvicorn (1 worker).
-ExecStart=/opt/lxc-ansible/webpanel/run-panel.sh
+ExecStart=/opt/hac/webpanel/run-panel.sh
 # `always` so the in-app "Update/Restart" button (which exits the process) and
 # self-update both bring the panel back automatically.
 Restart=always
 RestartSec=3
 # Persistent state lives outside the repo.
-StateDirectory=lxc-ansible
-ReadWritePaths=/var/lib/lxc-ansible /run /var/log/lxc-ansible
+StateDirectory=hac
+ReadWritePaths=/var/lib/hac /run /var/log/hac
 
 [Install]
 WantedBy=multi-user.target

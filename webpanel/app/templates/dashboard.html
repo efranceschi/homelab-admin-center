@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icon %}
 {% block nav_active %}dashboard{% endblock %}
+{% block autorefresh %}1{% endblock %}
 {% block title %}Dashboard · {{ app_name }}{% endblock %}
 
 {# Reusable SVG donut: segments=[{label,value,color}], total in the center. #}
@@ -101,50 +102,83 @@
       {% else %}<span class="st st-ok">{{ icon('check', 12) }} clear</span>{% endif %}</div>
     <div class="card-body p-0">
       {% if attention %}
-      <div class="feed">
+      {% set ood = attention|selectattr('kind','equalto','out_of_date')|list|length %}
+      {% set kfail = attention|selectattr('kind','equalto','failed')|list|length %}
+      {% set kreboot = attention|selectattr('kind','equalto','reboot')|list|length %}
+      <div class="sev-summary">
+        {% if ood %}<div class="sev-pill warn"><div class="sev-n">{{ ood }}</div><div class="sev-l">out of date</div></div>{% endif %}
+        {% if kfail %}<div class="sev-pill error"><div class="sev-n">{{ kfail }}</div><div class="sev-l">failed</div></div>{% endif %}
+        {% if kreboot %}<div class="sev-pill info"><div class="sev-n">{{ kreboot }}</div><div class="sev-l">reboot</div></div>{% endif %}
+      </div>
+      <div class="list-scroll">
         {% for a in attention %}
-        <a href="/hosts" class="feed-row">
-          <span class="feed-dot {{ 's-warn' if a.kind=='out_of_date' else ('s-error' if a.kind=='failed' else 's-info') }}"></span>
-          <span class="feed-main">{{ a.name }}</span>
-          <span class="feed-meta">
-            {%- if a.kind=='out_of_date' %}out of date{% if a.detail %} · {{ a.detail }}{% endif %}
-            {%- elif a.kind=='failed' %}last run failed
-            {%- else %}reboot required{% endif -%}
+        <a href="/hosts" class="lrow {{ 'sv-warn' if a.kind=='out_of_date' else ('sv-error' if a.kind=='failed' else 'sv-info') }}">
+          <span class="row-tile {{ 'warn' if a.kind=='out_of_date' else ('error' if a.kind=='failed' else 'info') }}">
+            {{ icon('alert', 16) if a.kind=='out_of_date' else (icon('x', 16) if a.kind=='failed' else icon('power', 16)) }}
           </span>
+          <span class="row-body">
+            <span class="row-name">{{ a.name }}</span>
+            <span class="row-sub">
+              {%- if a.kind=='out_of_date' %}configuration out of date{% if a.detail %} · {{ a.detail }} pending{% endif %}
+              {%- elif a.kind=='failed' %}last run failed
+              {%- else %}reboot required{% endif -%}
+            </span>
+          </span>
+          <span class="row-chev">{{ icon('chevron', 16) }}</span>
         </a>
         {% endfor %}
       </div>
       {% else %}
-      <div class="feed-empty text-success">{{ icon('check', 16) }} All systems nominal</div>
+      <div class="hero-ok">
+        <span class="hero-badge">{{ icon('check', 26) }}</span>
+        <span class="hero-title">All systems nominal</span>
+        <span class="hero-sub">every host reports up to date</span>
+      </div>
       {% endif %}
     </div></div>
   </div>
 
   <div class="col-lg-5">
+    {% set jtot = recent|length %}
     <div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center">
       <span>Recent jobs</span>
-      <span class="d-flex gap-3 mono" style="font-size:.75rem">
-        <span title="success"><span class="feed-dot s-ok"></span> {{ jobs_counts.success }}</span>
-        <span title="failed"><span class="feed-dot s-error"></span> {{ jobs_counts.failed }}</span>
-        {% if jobs_counts.running %}<span title="running"><span class="feed-dot s-info"></span> {{ jobs_counts.running }}</span>{% endif %}
+      <span class="d-flex gap-3 mono" style="font-size:.74rem">
+        <span class="text-success" title="success">{{ jobs_counts.success }} ok</span>
+        <span class="text-danger" title="failed">{{ jobs_counts.failed }} fail</span>
+        {% if jobs_counts.running %}<span class="text-primary" title="running">{{ jobs_counts.running }} run</span>{% endif %}
       </span></div>
     <div class="card-body p-0">
       {% if recent %}
-      <div class="feed">
+      <div class="px-3 pt-3 pb-2" title="last {{ jtot }} runs">
+        <div class="rate-bar">
+          <i class="r-ok"  style="width:{{ (jobs_counts.success / jtot * 100)|round(1) }}%"></i>
+          <i class="r-run" style="width:{{ (jobs_counts.running / jtot * 100)|round(1) }}%"></i>
+          <i class="r-err" style="width:{{ (jobs_counts.failed  / jtot * 100)|round(1) }}%"></i>
+        </div>
+      </div>
+      <div class="list-scroll">
         {% for j in recent[:8] %}
-        <a href="/jobs/{{ j.id }}" class="feed-row"
+        <a href="/jobs/{{ j.id }}" class="lrow {{ 'sv-ok' if j.status=='success' else ('sv-error' if j.status=='failed' else ('sv-info' if j.status=='running' else 'sv-idle')) }}"
            title="#{{ j.id }} · {{ 'apply (live)' if j.mode == 'apply' else 'dry-run' }} · {{ j.status }}">
-          <span class="feed-dot {{ 's-ok' if j.status=='success' else ('s-error' if j.status=='failed' else ('s-info' if j.status=='running' else 's-idle')) }}"></span>
-          <span class="feed-main">#{{ j.id }}</span>
-          <span class="feed-tag {{ 'text-accent' if j.mode == 'apply' else 'text-muted' }}">{{ 'apply' if j.mode == 'apply' else 'dry-run' }}</span>
-          {% if j.target_ref %}<span class="text-muted text-truncate" style="font-size:.74rem;max-width:120px">{{ j.target_ref }}</span>{% endif %}
-          <span class="feed-meta">{{ j.created_at.strftime('%m-%d %H:%M') if j.created_at else '' }}</span>
+          <span class="row-tile {{ 'ok' if j.status=='success' else ('error' if j.status=='failed' else ('info pulse' if j.status=='running' else 'idle')) }}">
+            {{ icon('check', 16) if j.status=='success' else (icon('x', 16) if j.status=='failed' else (icon('activity', 16) if j.status=='running' else icon('clock', 16))) }}
+          </span>
+          <span class="row-body">
+            <span class="row-name">#{{ j.id }}
+              <span class="feed-tag {{ 'text-accent' if j.mode == 'apply' else 'text-muted' }}">{{ 'apply' if j.mode == 'apply' else 'dry-run' }}</span></span>
+            {% if j.target_ref %}<span class="row-sub">{{ j.target_ref }}</span>{% endif %}
+          </span>
+          <span class="row-meta">{{ j.created_at.strftime('%m-%d %H:%M') if j.created_at else '' }}</span>
         </a>
         {% endfor %}
       </div>
       {% if recent|length > 8 %}<a href="/jobs" class="feed-more">+{{ recent|length - 8 }} more →</a>{% endif %}
       {% else %}
-      <div class="feed-empty text-muted">No jobs run yet.</div>
+      <div class="hero-ok">
+        <span class="hero-badge" style="background:var(--fill-idle);color:var(--text-secondary);border-color:var(--status-idle);box-shadow:none">{{ icon('terminal', 24) }}</span>
+        <span class="hero-title">No jobs yet</span>
+        <span class="hero-sub">runs you trigger will appear here</span>
+      </div>
       {% endif %}
     </div></div>
   </div>

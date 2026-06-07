@@ -9,10 +9,27 @@ from sqlalchemy.orm import Session
 from .. import system
 from ..auth import create_user, current_user, require_admin, verify_csrf
 from ..db import db_dependency
-from ..models import AuditLog, User
+from ..jobs import DEFAULT_MAX_CONCURRENT, MAX_MAX_CONCURRENT, manager as job_manager
+from ..models import AuditLog, Setting, User
 from ..plugins import registry
 from ..scheduler import manager as scheduler_manager
-from ..templating import render
+from ..templating import render, set_auto_refresh_seconds, set_instance_name
+
+
+def _get_setting_int(db: Session, key: str, default: int) -> int:
+    row = db.get(Setting, key)
+    try:
+        return int(row.value) if row and str(row.value).strip() else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _set_setting(db: Session, key: str, value: str) -> None:
+    row = db.get(Setting, key)
+    if row is None:
+        db.add(Setting(key=key, value=value, value_type="int"))
+    else:
+        row.value = value
 
 router = APIRouter(prefix="/settings")
 
@@ -31,7 +48,55 @@ def settings_home(
         plugins=registry.all(),
         scheduler=scheduler_manager.status(),
         under_systemd=system.under_systemd(),
+        max_concurrent_jobs=_get_setting_int(db, "max_concurrent_jobs", DEFAULT_MAX_CONCURRENT),
+        max_concurrent_cap=MAX_MAX_CONCURRENT,
+        auto_refresh_seconds=_get_setting_int(db, "auto_refresh_seconds", 180),
+        running_jobs=job_manager.running_count(),
+        queued_jobs=job_manager.queued_count(),
     )
+
+
+@router.post("/instance", dependencies=[Depends(verify_csrf)])
+def update_instance_name(
+    request: Request,
+    instance_name: str = Form(""),
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    value = instance_name.strip()
+    row = db.get(Setting, "instance_name")
+    if row is None:
+        db.add(Setting(key="instance_name", value=value, value_type="str"))
+    else:
+        row.value = value
+    set_instance_name(value)  # refresh the live navbar global (single worker)
+    db.add(AuditLog(user_id=user.id, action="setting.update", target="instance_name"))
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/runtime", dependencies=[Depends(verify_csrf)])
+def update_runtime(
+    request: Request,
+    max_concurrent_jobs: int = Form(DEFAULT_MAX_CONCURRENT),
+    auto_refresh_seconds: int = Form(180),
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    """Job concurrency + page auto-refresh interval (admin)."""
+    mc = max(1, min(MAX_MAX_CONCURRENT, max_concurrent_jobs))
+    ar = auto_refresh_seconds
+    if ar < 0:
+        ar = 0
+    if 0 < ar < 10:
+        ar = 10
+    ar = min(3600, ar)
+    _set_setting(db, "max_concurrent_jobs", str(mc))
+    _set_setting(db, "auto_refresh_seconds", str(ar))
+    set_auto_refresh_seconds(ar)  # refresh the live global (single worker)
+    # A freed/raised limit may let queued jobs start immediately.
+    job_manager._dispatch()
+    db.add(AuditLog(user_id=user.id, action="setting.update", target="runtime"))
+    return RedirectResponse("/settings#runtime", status_code=303)
 
 
 @router.post("/system/update", dependencies=[Depends(verify_csrf)])

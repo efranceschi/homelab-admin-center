@@ -83,6 +83,13 @@
   </div>
 </div>
 
+{% if not live and job.status == 'queued' %}
+<div class="alert alert-info d-flex align-items-center gap-2">
+  <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+  Queued — waiting for a free slot. This page refreshes automatically.</div>
+<script>setTimeout(() => location.reload(), 4000);</script>
+{% endif %}
+
 <pre class="log-view" id="log">{{ log_html|safe }}</pre>
 
 {% if live %}

@@ -74,6 +74,35 @@
 </div>
 
 {% if current_role == 'admin' %}
+<div class="card mb-4" id="runtime">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Jobs &amp; automation</span>
+    <span class="st st-info">{{ icon('activity', 12) }} {{ running_jobs }} running · {{ queued_jobs }} queued</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/settings/runtime">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Max simultaneous jobs</label>
+          <input class="form-control form-control-sm mono" type="number" name="max_concurrent_jobs"
+                 min="1" max="{{ max_concurrent_cap }}" value="{{ max_concurrent_jobs }}">
+          <div class="form-text">Extra runs are queued and started as slots free
+            (1–{{ max_concurrent_cap }}). Panel jobs never overlap a scheduler/cron run.</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Auto-refresh interval (seconds)</label>
+          <input class="form-control form-control-sm mono" type="number" name="auto_refresh_seconds"
+                 min="0" max="3600" step="10" value="{{ auto_refresh_seconds }}">
+          <div class="form-text">Volatile views (Dashboard, Jobs, Hosts, Schedules)
+            reload on this interval. <code>0</code> disables; minimum 10s.</div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm mt-3"><span class="btn-ico">{{ icon('check', 14) }}</span> Save</button>
+    </form>
+  </div>
+</div>
+
 <div class="row g-4">
   <div class="col-lg-6" id="plugins">
     <div class="card h-100"><div class="card-header">Plugins</div><div class="card-body">

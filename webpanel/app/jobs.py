@@ -2,7 +2,7 @@
 
 Design constraints (see plan):
   - Single Uvicorn worker -> this in-memory registry is authoritative.
-  - One job at a time, guarded by the SAME flock file (/run/lxc-ansible.lock),
+  - One job at a time, guarded by the SAME flock file (/run/hac.lock),
     shared with the scheduler child process so runs never overlap.
   - Live logs streamed to the browser via SSE (an asyncio.Queue per subscriber).
 """
@@ -11,12 +11,11 @@ from __future__ import annotations
 import asyncio
 import fcntl
 import os
-import shutil
 import signal
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import config
+from . import config, housekeeping
 from .ansible_layer import results
 from .db import session_scope
 from .models import HostState, Job, Server
@@ -52,30 +51,75 @@ class JobRuntime:
         self.subscribers.discard(q)
 
 
-class JobManager:
-    def __init__(self) -> None:
-        self._active: JobRuntime | None = None
-        self._lock_fd: int | None = None
+DEFAULT_MAX_CONCURRENT = 1
+MAX_MAX_CONCURRENT = 10
+_RETRY_SECONDS = 5  # re-check the flock this often while runs are queued
 
+
+class JobManager:
+    """Runs panel jobs with a bounded pool + FIFO queue.
+
+    Concurrency is capped by the ``max_concurrent_jobs`` setting (default 1).
+    Extra runs are queued (DB status ``queued``) instead of rejected and started
+    as slots free. A single flock (shared with the scheduler child) is held with
+    reference-counting while ANY panel job runs, so panel jobs may overlap each
+    other but never overlap a scheduler/cron run; when the scheduler holds the
+    lock, queued jobs simply wait and a timer retries.
+    """
+
+    def __init__(self) -> None:
+        self._active: dict[int, JobRuntime] = {}
+        self._queue: list[tuple[int, list[str], dict[str, str], Path, list[int]]] = []
+        self._lock_fd: int | None = None
+        self._retry_handle: asyncio.TimerHandle | None = None
+
+    # --- introspection ------------------------------------------------------
     @property
     def active(self) -> JobRuntime | None:
-        return self._active
+        """Back-compat: the most recently started running job, if any."""
+        if not self._active:
+            return None
+        return next(reversed(list(self._active.values())))
+
+    def get_runtime(self, job_id: int) -> JobRuntime | None:
+        return self._active.get(job_id)
+
+    def running_count(self) -> int:
+        return len(self._active)
+
+    def queued_count(self) -> int:
+        return len(self._queue)
+
+    def max_concurrent(self) -> int:
+        from .models import Setting
+
+        try:
+            with session_scope() as db:
+                row = db.get(Setting, "max_concurrent_jobs")
+                n = int(row.value) if row and str(row.value).strip() else DEFAULT_MAX_CONCURRENT
+        except (ValueError, TypeError, Exception):
+            n = DEFAULT_MAX_CONCURRENT
+        return max(1, min(MAX_MAX_CONCURRENT, n))
 
     def is_busy(self) -> bool:
-        return self._active is not None and not self._active.done.is_set()
+        """True when the running pool is at capacity (further runs would queue)."""
+        return len(self._active) >= self.max_concurrent()
 
-    # --- flock interlock (shared with run.sh) -------------------------------
-    def _acquire_flock(self) -> None:
+    # --- flock interlock (shared with the scheduler) ------------------------
+    def _acquire_flock(self) -> bool:
+        """Ensure the shared run-lock is held. Returns False if another process
+        (the scheduler / a cron run) currently holds it."""
+        if self._lock_fd is not None:
+            return True
         config.RUN_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(str(config.RUN_LOCK_FILE), os.O_WRONLY | os.O_CREAT, 0o644)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             os.close(fd)
-            raise JobBusyError(
-                "another lxc-ansible run is in progress (cron or panel); try again later"
-            )
+            return False
         self._lock_fd = fd
+        return True
 
     def _release_flock(self) -> None:
         if self._lock_fd is not None:
@@ -85,32 +129,65 @@ class JobManager:
             finally:
                 self._lock_fd = None
 
-    # --- launch -------------------------------------------------------------
-    async def launch(
+    # --- submit / dispatch --------------------------------------------------
+    def submit(
         self,
         job_id: int,
         cmd: list[str],
         env: dict[str, str],
         run_dir: Path,
         target_server_ids: list[int],
-    ) -> JobRuntime:
-        if self.is_busy():
-            raise JobBusyError("a panel job is already running")
-        self._acquire_flock()
+    ) -> None:
+        """Enqueue a job (already persisted as ``queued``) and try to dispatch."""
+        self._queue.append((job_id, cmd, env, run_dir, target_server_ids))
+        self._dispatch()
 
+    def _arm_retry(self) -> None:
+        if self._retry_handle is not None:
+            return
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            return
+
+        def _retry() -> None:
+            self._retry_handle = None
+            self._dispatch()
+
+        self._retry_handle = loop.call_later(_RETRY_SECONDS, _retry)
+
+    def _dispatch(self) -> None:
+        """Start queued jobs up to the concurrency limit, if the lock is free."""
+        if self._retry_handle is not None:
+            self._retry_handle.cancel()
+            self._retry_handle = None
+        limit = self.max_concurrent()
+        while self._queue and len(self._active) < limit:
+            if not self._acquire_flock():
+                # Scheduler/cron holds the lock — wait and retry shortly.
+                self._arm_retry()
+                return
+            job_id, cmd, env, run_dir, server_ids = self._queue.pop(0)
+            self._start(job_id, cmd, env, run_dir, server_ids)
+
+    def _start(
+        self,
+        job_id: int,
+        cmd: list[str],
+        env: dict[str, str],
+        run_dir: Path,
+        target_server_ids: list[int],
+    ) -> None:
         log_path = run_dir / "stdout.log"
         rt = JobRuntime(job_id, log_path)
-        self._active = rt
-
+        self._active[job_id] = rt
         with session_scope() as db:
             job = db.get(Job, job_id)
             if job:
                 job.status = "running"
                 job.started_at = datetime.now(timezone.utc)
                 job.log_path = str(log_path)
-
         asyncio.create_task(self._run(rt, cmd, env, run_dir, target_server_ids))
-        return rt
 
     async def _run(
         self,
@@ -149,15 +226,21 @@ class JobManager:
             rt.publish(f"\n[panel] runner error: {exc}\n")
         finally:
             log_file.close()
-            rt.status = "success" if rc == 0 else "failed"
+            # Preserve an explicit cancellation; otherwise derive from rc.
+            if rt.status != "cancelled":
+                rt.status = "success" if rc == 0 else "failed"
             self._finalize(rt, rc, target_server_ids)
             self._cleanup_secrets(run_dir)
-            self._rotate_logs()
-            self._release_flock()
+            housekeeping.run_housekeeping()
             rt.publish(f"\n[panel] job finished rc={rc} ({rt.status})\n")
             rt.publish("__PANEL_JOB_DONE__")
             rt.done.set()
-            self._active = None
+            # Free the slot, start any queued job (keeps the lock if work
+            # remains), and only release the shared lock once fully idle.
+            self._active.pop(rt.job_id, None)
+            self._dispatch()
+            if not self._active and not self._queue:
+                self._release_flock()
 
     # --- post-processing ----------------------------------------------------
     def _finalize(self, rt: JobRuntime, rc: int, server_ids: list[int]) -> None:
@@ -166,13 +249,17 @@ class JobManager:
         text = "".join(rt.lines)
         recap = results.parse_recap(text)
         reboot_hosts = results.parse_reboot(text)
+        finished = datetime.now(timezone.utc)
         with session_scope() as db:
             job = db.get(Job, rt.job_id)
+            mode = job.mode if job else "check"
             if job:
                 job.status = rt.status
                 job.return_code = rc
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = finished
                 job.pid = None
+                # Persist the full log so it survives run-dir housekeeping.
+                job.log_text = text
             for sid in server_ids:
                 srv = db.get(Server, sid)
                 if srv is None:
@@ -187,6 +274,12 @@ class JobManager:
                 if new_status is not None:
                     state.last_status = new_status
                 state.reboot_required = srv.name in reboot_hosts
+                cfg_status, pending = results.derive_config_state(
+                    mode, stats, reachable=stats is not None
+                )
+                state.config_status = cfg_status
+                state.config_checked_at = finished
+                state.pending_changes = pending
 
     @staticmethod
     def _cleanup_secrets(run_dir: Path) -> None:
@@ -196,32 +289,32 @@ class JobManager:
         for key in run_dir.glob("id_*"):
             key.unlink(missing_ok=True)
 
-    @staticmethod
-    def _rotate_logs() -> None:
-        runs = sorted(
-            config.RUN_DIRS.glob("*/"),
-            key=lambda d: d.stat().st_mtime,
-            reverse=True,
-        )
-        for old in runs[config.JOB_LOG_RETENTION:]:
-            shutil.rmtree(old, ignore_errors=True)
-
     # --- cancel -------------------------------------------------------------
     async def cancel(self, job_id: int) -> bool:
-        rt = self._active
-        if rt is None or rt.job_id != job_id or rt.process is None:
-            return False
-        rt.process.send_signal(signal.SIGTERM)
-        try:
-            await asyncio.wait_for(rt.process.wait(), timeout=10)
-        except asyncio.TimeoutError:
-            rt.process.send_signal(signal.SIGKILL)
-        with session_scope() as db:
-            job = db.get(Job, job_id)
-            if job:
-                job.status = "cancelled"
-        rt.status = "cancelled"
-        return True
+        # Running job: signal the process; status is set here and preserved by _run.
+        rt = self._active.get(job_id)
+        if rt is not None and rt.process is not None:
+            rt.status = "cancelled"
+            rt.process.send_signal(signal.SIGTERM)
+            try:
+                await asyncio.wait_for(rt.process.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                rt.process.send_signal(signal.SIGKILL)
+            with session_scope() as db:
+                job = db.get(Job, job_id)
+                if job:
+                    job.status = "cancelled"
+            return True
+        # Still queued: drop it from the queue and mark cancelled.
+        for i, spec in enumerate(self._queue):
+            if spec[0] == job_id:
+                self._queue.pop(i)
+                with session_scope() as db:
+                    job = db.get(Job, job_id)
+                    if job:
+                        job.status = "cancelled"
+                return True
+        return False
 
 
 manager = JobManager()

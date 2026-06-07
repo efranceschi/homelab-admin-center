@@ -269,21 +269,39 @@ hr { border-color: var(--border-subtle); opacity: 1; }
 }
 .icon-btn:hover { border-color: var(--border-active); color: var(--text-primary); background: var(--bg-elevated); }
 
-/* Mobile top bar — only shown < lg; holds the hamburger + brand. */
+/* App logo (sidebar brand). Wordmark inherits text colour; mark uses accents. */
+.app-logo { display: block; }
+.sidebar-brand .app-logo { color: var(--text-primary); }
+
+/* Top bar — always visible. Hamburger (mobile) on the left; the instance
+   identity sits on the right, stacked over two lines (name + hostname badge). */
 .topbar {
-  display: none; align-items: center; gap: .6rem;
-  padding: .55rem .85rem; background: var(--bg-surface);
+  display: flex; align-items: center; gap: .6rem;
+  padding: .5rem 1.5rem; background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle); position: sticky; top: 0; z-index: 1030;
 }
-.topbar .tb-brand { font-family: var(--fonts-mono); font-weight: 700; color: var(--text-primary); }
-.topbar .tb-brand .brand-prompt { color: var(--accent-secondary); }
+.tb-burger { display: none; }   /* mobile only (shown in the media query below) */
+.topbar-identity {
+  margin-left: auto; display: flex; flex-direction: column; align-items: flex-end;
+  line-height: 1.25; min-width: 0;
+}
+.topbar-identity .ti-name {
+  font-family: var(--fonts-mono); font-weight: 700; font-size: .9rem; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw;
+}
+.topbar-identity .ti-host {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-family: var(--fonts-mono); font-size: .68rem; color: var(--text-secondary);
+}
+.topbar-identity .ti-host svg { color: var(--accent-secondary); }
 
 .app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .app-content { flex: 1 1 auto; padding: 1.25rem 1.5rem; }
 .sidebar-backdrop { display: none; }
 
 @media (max-width: 991.98px) {
-  .topbar { display: flex; }
+  .tb-burger { display: inline-flex; }
+  .topbar { padding-left: .85rem; padding-right: .85rem; }
   .sidebar {
     position: fixed; left: 0; top: 0; height: 100vh;
     transform: translateX(-100%); transition: transform 200ms ease;
@@ -454,6 +472,62 @@ hr { border-color: var(--border-subtle); opacity: 1; }
 .feed-more { display: block; text-align: center; padding: .45rem; border-top: 1px solid var(--border-subtle); font-size: .75rem; color: var(--text-secondary); }
 .feed-more:hover { color: var(--accent-secondary); background: var(--bg-elevated); }
 .feed-empty { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: 2.5rem 1rem; font-family: var(--fonts-mono); font-size: .85rem; }
+
+/* --- Rich list rows (dashboard Attention / Recent Jobs) — higher-impact than
+   the bare feed: a coloured left rail + a tinted status tile per row, with a
+   severity tally strip and a "healthy" hero for the empty state. --- */
+.lrow {
+  display: flex; align-items: center; gap: .7rem;
+  padding: .6rem .9rem; border-bottom: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--border-subtle); text-decoration: none;
+  transition: background .15s ease, border-color .15s ease;
+}
+.lrow:last-child { border-bottom: 0; }
+.lrow:hover { background: var(--bg-elevated); }
+.lrow:hover .row-chev { color: var(--accent-secondary); transform: translateX(2px); }
+.lrow.sv-ok    { border-left-color: var(--status-ok); }
+.lrow.sv-warn  { border-left-color: var(--status-warn); }
+.lrow.sv-error { border-left-color: var(--status-error); }
+.lrow.sv-info  { border-left-color: var(--status-info); }
+.lrow.sv-idle  { border-left-color: var(--status-idle); }
+.row-tile {
+  flex: 0 0 32px; width: 32px; height: 32px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; border: 1px solid transparent;
+}
+.row-tile.ok    { background: var(--fill-ok);    color: var(--status-ok);    border-color: var(--status-ok); }
+.row-tile.warn  { background: var(--fill-warn);  color: var(--status-warn);  border-color: var(--status-warn); }
+.row-tile.error { background: var(--fill-error); color: var(--status-error); border-color: var(--status-error); }
+.row-tile.info  { background: var(--fill-info);  color: var(--status-info);  border-color: var(--status-info); }
+.row-tile.idle  { background: var(--fill-idle);  color: var(--text-secondary); border-color: var(--status-idle); }
+.row-tile.pulse { animation: pulse-cyan 2s ease-in-out infinite; }
+.row-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.row-name { font-family: var(--fonts-mono); font-weight: 600; font-size: .85rem; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: .45rem; }
+.row-sub  { font-size: .7rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-meta { flex: 0 0 auto; text-align: right; font-family: var(--fonts-mono); font-size: .72rem; color: var(--text-secondary); white-space: nowrap; }
+.row-chev { flex: 0 0 auto; color: var(--text-muted); transition: color .15s ease, transform .15s ease; }
+.list-scroll { max-height: 300px; overflow-y: auto; }
+
+/* Severity tally strip */
+.sev-summary { display: flex; gap: .5rem; padding: .7rem .9rem; border-bottom: 1px solid var(--border-subtle); }
+.sev-pill { flex: 1; text-align: center; padding: .45rem .3rem; border-radius: 4px; border: 1px solid var(--border-subtle); background: var(--bg-inset); }
+.sev-pill .sev-n { font-family: var(--fonts-mono); font-size: 1.35rem; font-weight: 700; line-height: 1; }
+.sev-pill .sev-l { font-size: .58rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-secondary); }
+.sev-pill.warn  { border-color: var(--status-warn); }  .sev-pill.warn .sev-n  { color: var(--status-warn); }
+.sev-pill.error { border-color: var(--status-error); } .sev-pill.error .sev-n { color: var(--status-error); }
+.sev-pill.info  { border-color: var(--status-info); }  .sev-pill.info .sev-n  { color: var(--status-info); }
+
+/* Success-rate bar (recent jobs header) */
+.rate-bar { height: 4px; background: var(--bg-inset); border-radius: 2px; overflow: hidden; display: flex; }
+.rate-bar > i { display: block; height: 100%; }
+.rate-bar .r-ok { background: var(--status-ok); } .rate-bar .r-err { background: var(--status-error); } .rate-bar .r-run { background: var(--status-info); }
+
+/* Healthy / empty hero */
+.hero-ok { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; padding: 2.25rem 1rem; text-align: center; }
+.hero-badge { width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--fill-ok); color: var(--status-ok); border: 1px solid var(--status-ok); box-shadow: 0 0 24px var(--accent-glow-cyan); }
+.hero-title { font-family: var(--fonts-mono); color: var(--text-primary); font-weight: 600; }
+.hero-sub { font-size: .75rem; color: var(--text-secondary); }
 
 /* === COMPONENTS: BUTTONS ============================================== */
 /* radius 3px keeps buttons reading as toggle switches / keycaps, not bubbles. */

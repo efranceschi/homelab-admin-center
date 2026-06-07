@@ -29,12 +29,10 @@ def _write_key_file(run_dir: Path, server: Server, secret: str) -> Path:
 
 def build_inventory(run_dir: Path, servers: list[Server]) -> Path:
     """Write inventory.json for the given servers and return its path."""
-    hostvars: dict[str, dict] = {}
-    all_hosts: list[str] = []
+    hosts: dict[str, dict] = {}
 
     for srv in servers:
         host = srv.name
-        all_hosts.append(host)
         hv: dict[str, object] = {}
 
         if srv.connection_type == "local":
@@ -61,11 +59,13 @@ def build_inventory(run_dir: Path, servers: list[Server]) -> Path:
         else:
             raise ValueError(f"unknown connection_type: {srv.connection_type}")
 
-        hostvars[host] = hv
+        hosts[host] = hv
 
+    # Static inventory format consumed by Ansible's YAML/auto plugin: each host
+    # maps directly to its vars. (The _meta/hostvars + host-list shape is only
+    # valid for executable dynamic-inventory scripts, not a static .json file.)
     inventory = {
-        "_meta": {"hostvars": hostvars},
-        "all": {"hosts": all_hosts},
+        "all": {"hosts": hosts},
     }
     inv_path = run_dir / "inventory.json"
     inv_path.write_text(json.dumps(inventory, indent=2))

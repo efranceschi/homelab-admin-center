@@ -19,6 +19,12 @@ REQ_HASH_FILE="${VENV}/.requirements.sha256"
 HOST="${PANEL_HOST:-0.0.0.0}"
 PORT="${PANEL_PORT:-8910}"
 
+# Reverse-proxy support: trust X-Forwarded-Proto/For only from these proxy IPs
+# so the app sees the real client IP and the original https scheme (needed for
+# Secure cookies). Default: localhost (proxy on the same host). Set to the
+# proxy's IP, a comma-separated list, or "*" when the proxy runs elsewhere.
+FORWARDED_ALLOW_IPS="${PANEL_FORWARDED_ALLOW_IPS:-127.0.0.1}"
+
 cd "${PANEL_DIR}"
 
 # --- persistent venv, recreated only when requirements-web.txt changes ---
@@ -35,5 +41,8 @@ fi
 # shellcheck disable=SC1091
 source "${VENV}/bin/activate"
 
-echo "[webpanel] starting on http://${HOST}:${PORT}"
-exec uvicorn app.main:app --host "${HOST}" --port "${PORT}" --workers 1 "$@"
+echo "[webpanel] starting on http://${HOST}:${PORT} (trusting proxy headers from ${FORWARDED_ALLOW_IPS})"
+exec uvicorn app.main:app \
+    --host "${HOST}" --port "${PORT}" --workers 1 \
+    --proxy-headers --forwarded-allow-ips "${FORWARDED_ALLOW_IPS}" \
+    "$@"

@@ -18,7 +18,23 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import config
 from .models import Base
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "4"
+
+# Columns added after the initial release, keyed by table. PRAGMA table_info is
+# the source of truth, so applying these is idempotent (only missing columns are
+# added). create_all() never alters an existing table, hence this additive step.
+_ADDITIVE_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "host_state": [
+        ("config_status", "VARCHAR(16)"),
+        ("config_checked_at", "DATETIME"),
+        ("pending_changes", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+    "jobs": [
+        ("log_text", "TEXT"),
+        ("server_ids", "VARCHAR(512)"),
+        ("plugin_ids", "VARCHAR(512)"),
+    ],
+}
 
 _engine: Engine | None = None
 _SessionFactory: sessionmaker[Session] | None = None
@@ -44,10 +60,29 @@ def init_engine() -> Engine:
     return _engine
 
 
+def _migrate(engine: Engine) -> None:
+    """Apply additive ALTER TABLE statements for columns added post-v1.
+
+    SQLite's ``ALTER TABLE ADD COLUMN`` is online and cheap; only columns the
+    table is missing are added (never dropped/renamed), so this is safe to run
+    on every boot.
+    """
+    with engine.begin() as conn:
+        for table, cols in _ADDITIVE_COLUMNS.items():
+            rows = conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
+            have = {r[1] for r in rows}  # r[1] == column name
+            for name, type_clause in cols:
+                if name not in have:
+                    conn.exec_driver_sql(
+                        f"ALTER TABLE {table} ADD COLUMN {name} {type_clause}"
+                    )
+
+
 def init_db() -> None:
-    """Create tables and tighten DB file permissions."""
+    """Create tables, apply additive migrations, and tighten DB permissions."""
     engine = init_engine()
     Base.metadata.create_all(engine)
+    _migrate(engine)
     try:
         os.chmod(config.DB_PATH, 0o600)
     except OSError:
@@ -55,8 +90,11 @@ def init_db() -> None:
     with session_scope() as db:
         from .models import Setting
 
-        if db.get(Setting, "schema_version") is None:
+        row = db.get(Setting, "schema_version")
+        if row is None:
             db.add(Setting(key="schema_version", value=SCHEMA_VERSION))
+        elif row.value != SCHEMA_VERSION:
+            row.value = SCHEMA_VERSION
 
 
 def get_session() -> Session:

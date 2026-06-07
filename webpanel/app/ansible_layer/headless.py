@@ -65,6 +65,8 @@ def run_now(
         target_type="group" if len(servers) > 1 else "host",
         target_ref=",".join(s.name for s in servers),
         plugin_tags=",".join(tags),
+        server_ids=",".join(str(s.id) for s in servers),
+        plugin_ids=",".join(plugin_ids),
         triggered_by=triggered_by,
         created_at=datetime.now(timezone.utc),
     )
@@ -113,18 +115,27 @@ def run_now(
     text = log_path.read_text(errors="replace")
     recap = results.parse_recap(text)
     reboot = results.parse_reboot(text)
+    finished = datetime.now(timezone.utc)
+    norm_mode = "apply" if mode == "apply" else "check"
     job.status = "success" if rc == 0 else "failed"
     job.return_code = rc
-    job.finished_at = datetime.now(timezone.utc)
+    job.finished_at = finished
     for srv in servers:
         state = db.scalar(select(HostState).where(HostState.server_id == srv.id))
         if state is None:
             state = HostState(server_id=srv.id)
             db.add(state)
         state.last_job_id = job_id
-        st = results.status_from_stats(recap.get(srv.name))
+        stats = recap.get(srv.name)
+        st = results.status_from_stats(stats)
         if st is not None:
             state.last_status = st
         state.reboot_required = srv.name in reboot
+        cfg_status, pending = results.derive_config_state(
+            norm_mode, stats, reachable=stats is not None
+        )
+        state.config_status = cfg_status
+        state.config_checked_at = finished
+        state.pending_changes = pending
     db.commit()
     return job
