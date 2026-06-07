@@ -3,7 +3,7 @@
 -r requirements-web.txt
 
 pytest>=9.0.3
-pytest-cov>=5.0
+pytest-cov>=7.1.0
 pytest-asyncio>=0.23
 httpx>=0.28.1            # required by fastapi.testclient.TestClient
 
