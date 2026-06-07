@@ -62,6 +62,7 @@ def request_restart(delay: float = 1.0) -> str:
         if under_systemd():
             os._exit(0)  # systemd (Restart=always) brings us back fresh
         try:
+            # nosemgrep: python.lang.security.audit.dangerous-os-exec-tainted-env-args.dangerous-os-exec-tainted-env-args -- self-respawn: argv is our own process argv, not external input
             os.execv(sys.executable, [sys.executable, sys.argv[0], *sys.argv[1:]])
         except Exception:
             os._exit(0)  # let any supervisor bring it back

@@ -33,7 +33,15 @@ jobs:
         run: yamllint -c .yamllint roles playbooks inventory .github
 
       - name: ansible-lint
-        run: ansible-lint
+        env:
+          # ansible.cfg points vault_password_file at /etc/hac/vault-pass, which
+          # only exists on deployed hosts. ansible-lint runs --syntax-check, which
+          # requires the password file to *exist* but does not decrypt group_vars,
+          # so point it at a throwaway file in the runner temp dir.
+          ANSIBLE_VAULT_PASSWORD_FILE: ${{ runner.temp }}/ci-vault-pass
+        run: |
+          echo ci > "${ANSIBLE_VAULT_PASSWORD_FILE}"
+          ansible-lint
 
       - name: shellcheck
         run: shellcheck run.sh install.sh webpanel/run-panel.sh webpanel/install-service.sh

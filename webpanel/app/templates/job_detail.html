@@ -54,6 +54,7 @@
   {% set primary = actions[0] %}
   <div class="btn-group">
     {% if primary.kind == 'link' %}
+    {# nosemgrep: generic.html-templates.security.var-in-href.var-in-href -- href is a server-built literal path (e.g. '/jobs/'~job.id~'/retry'), not user input #}
     <a class="btn btn-sm {{ primary.cls }}" href="{{ primary.href }}">{{ primary.label }}</a>
     {% else %}
     <button type="button" class="btn btn-sm {{ primary.cls }}"
@@ -69,6 +70,7 @@
       {% for a in actions[1:] %}
       <li>
         {% if a.kind == 'link' %}
+        {# nosemgrep: generic.html-templates.security.var-in-href.var-in-href -- href is a server-built literal path, not user input #}
         <a class="dropdown-item" href="{{ a.href }}">{{ a.label }}</a>
         {% else %}
         <button type="button" class="dropdown-item"
@@ -90,6 +92,7 @@
 <script>setTimeout(() => location.reload(), 4000);</script>
 {% endif %}
 
+{# nosemgrep: python.flask.security.xss.audit.template-unescaped-with-safe.template-unescaped-with-safe -- log_html is produced by ansi_to_html(), which html.escape()s all text before adding colour spans #}
 <pre class="log-view" id="log">{{ log_html|safe }}</pre>
 
 {% if live %}

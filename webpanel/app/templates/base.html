@@ -113,6 +113,7 @@
     </main>
 
     <footer class="border-top mt-auto py-3 text-center small">
+      {# nosemgrep: generic.html-templates.security.var-in-href.var-in-href -- app_repo_url is a static config constant, not user input #}
       <a href="{{ app_repo_url }}" target="_blank" rel="noopener noreferrer" class="link-secondary">
         {{ instance_name or app_name }} on GitHub</a>
       <span class="mx-1">·</span>v{{ app_version }}
