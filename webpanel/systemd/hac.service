@@ -6,9 +6,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Must run as root on the Proxmox node: the panel shells out to `pct` and reads
-# the Ansible vault password file (/etc/hac/vault-pass, mode 0600).
-User=root
+# Runs as the unprivileged `hac` user (created by install-service.sh). Root is
+# obtained only for the few operations that need it, via /etc/sudoers.d/hac
+# (pct, `systemctl restart hac`, and ansible `become` for Local-host jobs).
+# Do NOT set NoNewPrivileges=yes — it would block those sudo calls.
+User=hac
+Group=hac
 WorkingDirectory=/opt/hac/webpanel
 # Bind address/port (override with `systemctl edit hac` if needed).
 # Binds to all interfaces by default; restrict via firewall or a reverse proxy.
@@ -28,9 +31,10 @@ ExecStart=/opt/hac/webpanel/run-panel.sh
 # self-update both bring the panel back automatically.
 Restart=always
 RestartSec=3
-# Persistent state lives outside the repo.
+# Persistent state and logs live outside the repo, created hac-owned by systemd.
 StateDirectory=hac
-ReadWritePaths=/var/lib/hac /run /var/log/hac
+LogsDirectory=hac
+ReadWritePaths=/var/lib/hac /var/log/hac /etc/hac /run
 
 [Install]
 WantedBy=multi-user.target

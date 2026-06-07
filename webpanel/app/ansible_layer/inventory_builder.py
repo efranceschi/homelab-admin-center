@@ -45,6 +45,12 @@ def build_inventory(
 
         if srv.connection_type == "local":
             hv["ansible_connection"] = "local"
+            # The panel runs as the unprivileged `hac` user, but roles applied to
+            # the node itself (timezone/apt/ssh/sssd) need root. Escalate via sudo
+            # — granted non-interactively by /etc/sudoers.d/hac. (pct/ssh hosts
+            # become root inside the target, so they don't need this.)
+            hv["ansible_become"] = True
+            hv["ansible_become_method"] = "sudo"
 
         elif srv.connection_type == "ssh":
             hv["ansible_connection"] = "ssh"

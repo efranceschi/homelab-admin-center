@@ -14,8 +14,8 @@ VENV="${PANEL_DIR}/.venv-web"
 REQ="${PANEL_DIR}/requirements-web.txt"
 REQ_HASH_FILE="${VENV}/.requirements.sha256"
 
-# Binds to all interfaces by default. The panel runs as root, so restrict
-# access at the network/firewall layer or front it with an authenticated proxy.
+# Binds to all interfaces by default. Restrict access at the network/firewall
+# layer or front it with an authenticated proxy (the panel has no IP allowlist).
 HOST="${PANEL_HOST:-0.0.0.0}"
 PORT="${PANEL_PORT:-8910}"
 

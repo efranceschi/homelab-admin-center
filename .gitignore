@@ -6,6 +6,18 @@ __pycache__/
 *.retry
 *.log
 
+# The `hac` service user's home IS this checkout (/opt/hac), so its login
+# dotfiles and tool caches land here — keep them out of git.
+.bashrc
+.profile
+.bash_history
+.cache/
+.config/
+.local/
+.ansible/
+.claude/
+.claude.json
+
 # Host secrets (the vault password NEVER goes into git).
 # vault.yml itself IS versionable (it is encrypted).
 vault-pass

@@ -55,14 +55,27 @@ class Connection(ConnectionBase):
             self._connected = True
         return self
 
-    def _pct(self):
-        return self.get_option("pct_cmd")
+    def _pct_base(self):
+        """pct argv prefix, resolved to an absolute path and routed through
+        ``sudo -n`` when not running as root.
+
+        ``pct`` needs root; under the web panel this plugin runs as the
+        unprivileged ``hac`` user, which is granted ``pct`` via
+        /etc/sudoers.d/hac. Run directly as root (the CLI path) it is unchanged.
+        """
+        import shutil
+
+        pct = self.get_option("pct_cmd")
+        pct = shutil.which(pct) or next(
+            (p for p in ("/usr/sbin/pct", "/usr/bin/pct") if os.path.exists(p)),
+            pct,
+        )
+        return ["sudo", "-n", pct] if os.geteuid() != 0 else [pct]
 
     def exec_command(self, cmd, in_data=None, sudoable=True):
         super().exec_command(cmd, in_data=in_data, sudoable=sudoable)
         executable = self.get_option("executable")
-        local_cmd = [
-            self._pct(),
+        local_cmd = self._pct_base() + [
             "exec",
             self._vmid,
             "--",
@@ -87,13 +100,13 @@ class Connection(ConnectionBase):
             raise AnsibleFileNotFound(
                 "source file not found: {0}".format(in_path)
             )
-        cmd = [self._pct(), "push", self._vmid, in_path, out_path]
+        cmd = self._pct_base() + ["push", self._vmid, in_path, out_path]
         self._run_transfer(cmd, "push")
 
     def fetch_file(self, in_path, out_path):
         super().fetch_file(in_path, out_path)
         display.vvv("FETCH {0} TO {1}".format(in_path, out_path), host=self._vmid)
-        cmd = [self._pct(), "pull", self._vmid, in_path, out_path]
+        cmd = self._pct_base() + ["pull", self._vmid, in_path, out_path]
         self._run_transfer(cmd, "pull")
 
     def _run_transfer(self, cmd, action):

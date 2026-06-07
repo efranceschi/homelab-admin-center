@@ -32,10 +32,11 @@ if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
     apt-get install -y --no-install-recommends \
-        git python3 python3-venv ca-certificates curl >/dev/null
+        git python3 python3-venv ca-certificates curl sudo >/dev/null
 else
     command -v git >/dev/null || die "git is required but not found."
     command -v python3 >/dev/null || die "python3 is required but not found."
+    command -v sudo >/dev/null || die "sudo is required but not found (the panel runs unprivileged)."
 fi
 
 # --- clone or update --------------------------------------------------------

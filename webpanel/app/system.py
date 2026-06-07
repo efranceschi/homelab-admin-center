@@ -41,8 +41,13 @@ def run_update() -> str:
 def request_restart(delay: float = 1.0) -> str:
     """Schedule a restart shortly after the current response is sent."""
     if under_systemd():
+        systemctl = shutil.which("systemctl") or "systemctl"
+        # The service runs as the unprivileged `hac` user; restarting the unit
+        # needs root, granted via /etc/sudoers.d/hac. Run directly as root (dev)
+        # no sudo is used.
+        sudo = "sudo -n " if os.geteuid() != 0 else ""
         subprocess.Popen(
-            ["bash", "-c", f"sleep {delay}; systemctl restart hac"],
+            ["bash", "-c", f"sleep {delay}; {sudo}{systemctl} restart hac"],
             start_new_session=True,
         )
         return "Restarting via systemd (hac.service)…"

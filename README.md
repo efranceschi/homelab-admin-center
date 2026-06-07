@@ -25,9 +25,10 @@ curl -fsSL https://raw.githubusercontent.com/efranceschi/homelab-admin-center/pr
 ```
 
 This pulls the **production branch (`prod`)**, installs prerequisites, clones the project
-to `/opt/hac`, seeds config from the bundled examples, and installs + starts the
-**`hac`** systemd service. When it finishes, open `http://<host>:8910` and create the first
-admin account.
+to `/opt/hac`, seeds config from the bundled examples, creates the unprivileged **`hac`**
+service user with a least-privilege sudo policy, and installs + starts the **`hac`** systemd
+service (running as that user). When it finishes, open `http://<host>:8910` and create the
+first admin account.
 
 Optional environment overrides:
 
@@ -60,7 +61,8 @@ panel itself via **Administration → Update & restart**.)
   grouped by `ostype` (`ostype_ubuntu`, `ostype_debian`, …).
 - **Custom connection plugin** — `plugins/connection/pct.py` runs tasks through
   `pct exec` / `pct push` / `pct pull`. No SSH; works in privileged and unprivileged
-  containers; runs as root on the Proxmox node.
+  containers. `pct` requires root: run directly it calls `pct`; run by the unprivileged
+  panel it transparently prefixes `sudo -n` (granted via `/etc/sudoers.d/hac`).
 - **Runtime** — a persistent virtualenv (`.venv`) recreated only when `requirements.txt`
   changes; collections vendored under `collections/`.
 - **Entrypoint** — `run.sh` (flock-guarded against overlapping runs) for manual/CLI use.
@@ -74,7 +76,9 @@ panel itself via **Administration → Update & restart**.)
 
 ## Requirements
 
-- A Proxmox VE node (the project runs **on the host** as `root`, because it shells out to `pct`).
+- A Proxmox VE node (the project runs **on the host**, shelling out to `pct`). The panel runs
+  as the unprivileged `hac` user and escalates to root only via `/etc/sudoers.d/hac` (see
+  [Security notes](#security-notes)); the CLI `run.sh` path still runs as `root`.
 - Python 3 (`python3 -m venv`).
 - The Ansible Vault password file at `/etc/hac/vault-pass` (only needed if you use the
   encrypted `vault.yml`).
@@ -195,9 +199,9 @@ server {
 
 | Type | How it connects | Notes |
 |------|-----------------|-------|
-| **Local** | `ansible_connection=local` | Runs against the panel host itself. |
+| **Local** | `ansible_connection=local` | Runs against the panel host (the Proxmox node) itself. Tasks escalate via ansible `become` (sudo), since the panel runs unprivileged. |
 | **SSH** | `ansible_connection=ssh` | Uses an SSH credential (key) stored encrypted in the panel DB. |
-| **Proxmox** | `ansible_connection=pct` | Reuses `plugins/connection/pct.py`; targets a container VMID. Requires running on the Proxmox node as root. |
+| **Proxmox** | `ansible_connection=pct` | Reuses `plugins/connection/pct.py`; targets a container VMID. Runs on the Proxmox node; `pct` is invoked via `sudo` (granted to the `hac` user in `/etc/sudoers.d/hac`). |
 
 ### Plugin layout
 
@@ -233,11 +237,33 @@ ansible-vault edit inventory/group_vars/all/vault.yml   # URI, base DN, bind DN/
 
 ## Security notes
 
-- The automation and the web panel both run as **root on the Proxmox node** (required for
-  `pct`). The panel binds to `0.0.0.0:8910` by default for LAN access — because it runs as
-  root, restrict access at the firewall layer or front it with an authenticated reverse
-  proxy, and do not expose it to untrusted networks. Override the bind with the
+- The web panel runs as the **unprivileged `hac` system user**, not root. The installer
+  creates the `hac` user/group, owns the checkout (`chown -R hac:hac /opt/hac`), and installs
+  a **least-privilege sudo policy** at `/etc/sudoers.d/hac` (mode `0440`, validated with
+  `visudo -cf`). The panel obtains root **only** for these operations:
+  - `pct` — Proxmox container management (host picker + the `pct` connection plugin).
+  - `systemctl restart hac` — the in-app **Restart** / **Update & restart**.
+  - `/bin/sh` via ansible `become` — applying roles to the Proxmox **node itself** (the
+    *Local* connection: timezone/apt/ssh/sssd). Drop this rule if you don't manage the node
+    from the panel, for a tighter footprint.
+
+  > `pct exec` and the `become` grant are each root-equivalent in effect. The hard win is
+  > that the **network-facing process, its database, secrets, and files are no longer root** —
+  > the escalation surface is reduced to those three audited sudoers entries. The unit must
+  > **not** set `NoNewPrivileges=yes` (it would block sudo). Self-update (`git pull` +
+  > `pip install`) needs no sudo — it runs as the `hac` owner of the checkout and venvs.
+
+- The panel binds to `0.0.0.0:8910` by default for LAN access. It has no built-in IP
+  allowlist, so restrict access at the firewall layer or front it with an authenticated
+  reverse proxy, and do not expose it to untrusted networks. Override the bind with the
   `PANEL_HOST`/`PANEL_PORT` env vars (or `systemctl edit hac`).
+
+- To develop as the service user: `sudo -u hac -i` (the account is password-locked but has a
+  shell and owns `/opt/hac`).
+
+- The CLI entrypoint `run.sh` (the daily/manual Ansible path) still expects to run as root;
+  the panel and `run.sh` share the same advisory lock (`/run/hac.lock`, pre-created `hac:hac`
+  by a `tmpfiles.d` entry) so their runs never overlap.
 - `inventory/group_vars/all/vault.yml` is safe to commit (encrypted). The vault password
   (`/etc/hac/vault-pass`) and the panel master key (`/etc/hac/panel.key`) must
   **never** be versioned — both are in `.gitignore`.
