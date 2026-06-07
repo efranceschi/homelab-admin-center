@@ -1,7 +1,9 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block nav_active %}plugins{% endblock %}
 {% block title %}Plugins · {{ app_name }}{% endblock %}
 {% block content %}
-<h4 class="mb-3">Plugins</h4>
+<div class="page-head mb-2"><span class="ph-icon">{{ icon('package', 20) }}</span><h4>Plugins</h4></div>
 <p class="text-muted">Each plugin wraps an Ansible functionality. Drop a new folder into
   <code>webpanel/plugins/</code> and reload from Settings to add more.</p>
 
@@ -13,8 +15,8 @@
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-start">
           <h5 class="card-title mb-1">{{ lp.name }}</h5>
-          {% if row and row.enabled %}<span class="badge bg-success">enabled</span>
-          {% else %}<span class="badge bg-secondary">disabled</span>{% endif %}
+          {% if row and row.enabled %}<span class="st st-ok">{{ icon('check', 12) }} enabled</span>
+          {% else %}<span class="st st-idle">disabled</span>{% endif %}
         </div>
         <div class="text-muted small mb-2">
           id <code>{{ lp.id }}</code> · v{{ lp.version }} · role <code>{{ lp.ansible_role }}</code></div>
@@ -25,8 +27,8 @@
           {% if not lp.role_path %}<div class="text-danger">role not found on disk</div>{% endif %}
         </div>
       </div>
-      <div class="card-footer bg-white d-flex gap-2">
-        <a class="btn btn-sm btn-outline-primary" href="/plugins/{{ lp.id }}">Configure</a>
+      <div class="card-footer d-flex gap-2">
+        <a class="btn btn-sm btn-outline-primary" href="/plugins/{{ lp.id }}"><span class="btn-ico">{{ icon('settings', 14) }}</span> Configure</a>
         {% if current_role == 'admin' %}
         <form method="post" action="/plugins/{{ lp.id }}/toggle">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

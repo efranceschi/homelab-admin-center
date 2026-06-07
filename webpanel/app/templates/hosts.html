@@ -1,16 +1,18 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block nav_active %}hosts{% endblock %}
 {% block title %}Hosts · {{ app_name }}{% endblock %}
 {% block content %}
-<h4 class="mb-3">Hosts</h4>
+<div class="page-head mb-3"><span class="ph-icon">{{ icon('server', 20) }}</span><h4>Infrastructure</h4></div>
 
 <ul class="nav nav-tabs" id="hostsTab" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="tab-hosts-btn" data-bs-toggle="tab" data-bs-target="#tab-hosts"
-            type="button" role="tab">Managed hosts <span class="badge bg-secondary">{{ servers|length }}</span></button>
+            type="button" role="tab">{{ icon('server', 14) }} Managed hosts <span class="badge bg-secondary">{{ servers|length }}</span></button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="tab-creds-btn" data-bs-toggle="tab" data-bs-target="#tab-creds"
-            type="button" role="tab">Credentials <span class="badge bg-secondary">{{ credentials|length }}</span></button>
+            type="button" role="tab">{{ icon('key', 14) }} Credentials <span class="badge bg-secondary">{{ credentials|length }}</span></button>
   </li>
 </ul>
 
@@ -23,8 +25,8 @@
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-action="/hosts/check-all"
                 data-title="Check all hosts" data-ok="Run check" data-ok-class="btn-primary"
-                data-confirm="Run a configuration drift check (--check) against all enabled hosts? This starts one job.">Check all</button>
-        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-host-modal">+ Add host</button>
+                data-confirm="Run a configuration drift check (--check) against all enabled hosts? This starts one job."><span class="btn-ico">{{ icon('search', 14) }}</span> Check all</button>
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-host-modal"><span class="btn-ico">{{ icon('plus', 14) }}</span> Add host</button>
       </div>
     </div>
 
@@ -130,10 +132,10 @@
                     data-title="Check host" data-ok="Run check" data-ok-class="btn-primary"
                     data-confirm="Run a drift check (--check) against “{{ s.name }}”?">Check</button>
             {% endif %}
-            <button type="button" class="btn btn-sm btn-outline-danger"
+            <button type="button" class="btn btn-sm btn-outline-danger" title="Delete host"
                     data-action="/hosts/{{ s.id }}/delete"
                     data-title="Delete host" data-ok="Delete"
-                    data-confirm="Delete host “{{ s.name }}”? This cannot be undone.">Delete</button>
+                    data-confirm="Delete host “{{ s.name }}”? This cannot be undone.">{{ icon('trash', 14) }}</button>
           </td>
         </tr>
       {% else %}
@@ -149,7 +151,7 @@
   <div class="tab-pane fade" id="tab-creds" role="tabpanel">
     <div class="d-flex justify-content-between align-items-center p-2 px-3 border-bottom">
       <span class="text-muted small">Secrets encrypted at rest</span>
-      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-cred-modal">+ Add credential</button>
+      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-cred-modal"><span class="btn-ico">{{ icon('plus', 14) }}</span> Add credential</button>
     </div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
       <thead><tr><th>Name</th><th>Type</th><th class="text-end">Actions</th></tr></thead>
@@ -158,10 +160,10 @@
         <tr>
           <td>{{ c.name }}</td><td>{{ c.type }}</td>
           <td class="text-end">
-            <button type="button" class="btn btn-sm btn-outline-danger"
+            <button type="button" class="btn btn-sm btn-outline-danger" title="Delete credential"
                     data-action="/hosts/credentials/{{ c.id }}/delete"
                     data-title="Delete credential" data-ok="Delete"
-                    data-confirm="Delete credential “{{ c.name }}”? Hosts using it will lose access.">Delete</button>
+                    data-confirm="Delete credential “{{ c.name }}”? Hosts using it will lose access.">{{ icon('trash', 14) }}</button>
           </td>
         </tr>
       {% else %}

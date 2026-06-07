@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="login-wrap">
-  <h3 class="mb-1">{{ app_name }}</h3>
+  <h3 class="mb-1"><span class="login-prompt">&gt;_</span> {{ app_name }}</h3>
   <p class="text-muted">Sign in to continue.</p>
   {% if error %}<div class="alert alert-danger py-2">{{ error }}</div>{% endif %}
   <form method="post" action="/login">

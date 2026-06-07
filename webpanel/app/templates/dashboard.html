@@ -1,11 +1,13 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block nav_active %}dashboard{% endblock %}
 {% block title %}Dashboard · {{ app_name }}{% endblock %}
 
 {# Reusable SVG donut: segments=[{label,value,color}], total in the center. #}
 {% macro donut(segments, total, caption) %}
 {% set C = 339.292 %}{# 2*pi*54 #}
 <svg viewBox="0 0 120 120" class="donut" role="img" aria-label="{{ caption }}">
-  <circle cx="60" cy="60" r="54" fill="none" stroke="#eceff3" stroke-width="12"></circle>
+  <circle cx="60" cy="60" r="54" fill="none" stroke="var(--bg-elevated)" stroke-width="12"></circle>
   {% set ns = namespace(acc=0) %}
   {% for s in segments %}
     {% set frac = (s.value / total) if total else 0 %}
@@ -34,21 +36,21 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="mb-0">Dashboard</h4>
+  <div class="page-head"><span class="ph-icon">{{ icon('grid', 20) }}</span><h4>Dashboard</h4></div>
   <form method="post" action="/hosts/check-all" class="m-0">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="btn btn-sm btn-outline-primary">Check all hosts</button>
+    <button class="btn btn-sm btn-outline-primary"><span class="btn-ico">{{ icon('refresh', 14) }}</span> Check all hosts</button>
   </form>
 </div>
 
 {# ---- KPI strip ---------------------------------------------------------- #}
 <div class="row g-3 mb-4">
-  <div class="col-6 col-lg-2"><div class="kpi kpi-primary"><div class="kpi-num">{{ counts.servers }}</div><div class="kpi-cap">Hosts</div></div></div>
-  <div class="col-6 col-lg-2"><div class="kpi kpi-success"><div class="kpi-num">{{ counts.updated }}</div><div class="kpi-cap">Updated</div></div></div>
-  <div class="col-6 col-lg-2"><div class="kpi kpi-warning"><div class="kpi-num">{{ counts.out_of_date }}</div><div class="kpi-cap">Out of date</div></div></div>
-  <div class="col-6 col-lg-2"><div class="kpi kpi-muted"><div class="kpi-num">{{ counts.unknown }}</div><div class="kpi-cap">Unknown</div></div></div>
-  <div class="col-6 col-lg-2"><div class="kpi kpi-danger"><div class="kpi-num">{{ counts.reboot }}</div><div class="kpi-cap">Reboot req.</div></div></div>
-  <div class="col-6 col-lg-2"><div class="kpi kpi-info"><div class="kpi-num">{{ counts.plugins_enabled }}</div><div class="kpi-cap">Plugins on</div></div></div>
+  <div class="col-6 col-lg-2"><div class="kpi kpi-primary anim-in"><span class="kpi-ico">{{ icon('server', 18) }}</span><div class="kpi-num">{{ counts.servers }}</div><div class="kpi-cap">Hosts</div></div></div>
+  <div class="col-6 col-lg-2"><div class="kpi kpi-success anim-in"><span class="kpi-ico">{{ icon('check', 18) }}</span><div class="kpi-num">{{ counts.updated }}</div><div class="kpi-cap">Updated</div></div></div>
+  <div class="col-6 col-lg-2"><div class="kpi kpi-warning anim-in"><span class="kpi-ico">{{ icon('alert', 18) }}</span><div class="kpi-num">{{ counts.out_of_date }}</div><div class="kpi-cap">Out of date</div></div></div>
+  <div class="col-6 col-lg-2"><div class="kpi kpi-muted anim-in"><span class="kpi-ico">{{ icon('search', 18) }}</span><div class="kpi-num">{{ counts.unknown }}</div><div class="kpi-cap">Unknown</div></div></div>
+  <div class="col-6 col-lg-2"><div class="kpi kpi-danger anim-in"><span class="kpi-ico">{{ icon('power', 18) }}</span><div class="kpi-num">{{ counts.reboot }}</div><div class="kpi-cap">Reboot req.</div></div></div>
+  <div class="col-6 col-lg-2"><div class="kpi kpi-info anim-in"><span class="kpi-ico">{{ icon('package', 18) }}</span><div class="kpi-num">{{ counts.plugins_enabled }}</div><div class="kpi-cap">Plugins on</div></div></div>
 </div>
 
 {# ---- Charts row --------------------------------------------------------- #}

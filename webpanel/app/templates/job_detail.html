@@ -1,24 +1,27 @@
 {% extends "base.html" %}
-{% from "_macros.html" import mode_badge %}
+{% from "_macros.html" import mode_badge, icon %}
+{% block nav_active %}jobs{% endblock %}
 {% block title %}Job #{{ job.id }} · {{ app_name }}{% endblock %}
 {% block content %}
 <nav aria-label="breadcrumb"><ol class="breadcrumb">
-  <li class="breadcrumb-item"><a href="/jobs">Run</a></li>
-  <li class="breadcrumb-item active">Job #{{ job.id }}</li>
+  <li class="breadcrumb-item"><a href="/jobs">jobs</a></li>
+  <li class="breadcrumb-item active">#{{ job.id }}</li>
 </ol></nav>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
-    <h5 class="mb-1">Job #{{ job.id }}
+    <h5 class="mb-1 d-flex align-items-center gap-2">
+      <span class="cell-id" style="font-size:1rem">#{{ job.id }}</span>
       {{ mode_badge(job.mode) }}
-      <span id="status-badge" class="badge
-        {% if job.status == 'success' %}bg-success{% elif job.status == 'failed' %}bg-danger
-        {% elif job.status == 'running' %}bg-primary{% elif job.status == 'cancelled' %}bg-secondary
-        {% else %}bg-light text-dark{% endif %}">{{ job.status }}</span>
+      {% if job.status == 'success' %}<span id="status-badge" class="st st-ok">{{ icon('check', 12) }} success</span>
+      {% elif job.status == 'failed' %}<span id="status-badge" class="st st-error">{{ icon('x', 12) }} failed</span>
+      {% elif job.status == 'running' %}<span id="status-badge" class="st st-info st-running">{{ icon('activity', 12) }} running</span>
+      {% elif job.status == 'cancelled' %}<span id="status-badge" class="st st-idle">cancelled</span>
+      {% else %}<span id="status-badge" class="st st-idle">{{ job.status }}</span>{% endif %}
     </h5>
     <div class="text-muted small">
-      tags <code>{{ job.plugin_tags }}</code> · target {{ job.target_ref }}
-      {% if job.return_code is not none %} · rc {{ job.return_code }}{% endif %}
+      tags <code>{{ job.plugin_tags }}</code> · target <span class="mono">{{ job.target_ref }}</span>
+      {% if job.return_code is not none %} · rc <span class="mono">{{ job.return_code }}</span>{% endif %}
     </div>
   </div>
   {# Build the action list, then render the first as the primary split-button

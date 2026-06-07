@@ -1,112 +1,128 @@
+{# Capture the page's active-nav key without emitting output; each page sets
+   it via {% block nav_active %}<key>{% endblock %}. Defined here once. #}
+{% set active_nav %}{% block nav_active %}{% endblock %}{% endset %}
+{% set active_nav = active_nav|trim %}
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  {# Apply the saved theme BEFORE the stylesheet loads to avoid a flash of the
+     wrong theme (FOUC). Mirrors the choice onto Bootstrap's own data-bs-theme. #}
+  <script>
+    (function () {
+      var t = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      document.documentElement.setAttribute('data-bs-theme', t);
+    })();
+  </script>
   <link rel="stylesheet" href="/static/css/bootstrap.min.css">
   <link rel="stylesheet" href="/static/css/panel.css">
   <script src="/static/js/htmx.min.js" defer></script>
   <script src="/static/js/sse.js" defer></script>
   <script src="/static/js/bootstrap.bundle.min.js" defer></script>
 </head>
-<body class="d-flex flex-column min-vh-100">
+<body>
+{% from "_macros.html" import icon %}
 {% if current_username %}
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="/dashboard">{{ instance_name or app_name }}
-      <span class="badge bg-secondary align-middle">{{ hostname }}</span></a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="nav">
-      <ul class="navbar-nav me-auto">
-        <li class="nav-item"><a class="nav-link" href="/dashboard">Dashboard</a></li>
+{# Theme toggle + logout, shared by sidebar footer and mobile top bar. #}
+{% macro theme_toggle() %}
+  <button type="button" class="icon-btn" id="theme-toggle" title="Toggle light/dark theme" aria-label="Toggle theme">
+    <span class="t-dark">{{ icon('moon') }}</span><span class="t-light" hidden>{{ icon('sun') }}</span>
+  </button>
+{% endmacro %}
 
-        <li class="nav-item"><a class="nav-link" href="/hosts">Infrastructure</a></li>
+<div class="app-shell">
+  {# ---- Sidebar : flattened, grouped navigation (replaces nav dropdowns) -- #}
+  <aside class="sidebar" id="sidebar">
+    <a class="sidebar-brand" href="/dashboard" title="{{ instance_name or app_name }} @ {{ hostname }}">
+      <span class="brand-prompt">&gt;_</span>
+      <span class="brand-name">{{ instance_name or app_name }}</span>
+      <span class="brand-host">{{ hostname }}</span>
+    </a>
 
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Automation</a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="/plugins">Plugins</a></li>
-            <li><a class="dropdown-item" href="/jobs">Run now</a></li>
-            <li><a class="dropdown-item" href="/schedules">Schedules</a></li>
-          </ul>
-        </li>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-title">monitor</div>
+        <a class="nav-link-item {{ 'active' if active_nav == 'dashboard' }}" href="/dashboard">
+          <span class="nav-ico">{{ icon('grid') }}</span> Dashboard</a>
+      </div>
 
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
-             hx-get="/jobs/recent" hx-target="#recent-jobs-menu" hx-trigger="click">Jobs</a>
-          <ul class="dropdown-menu dropdown-menu-end" style="min-width:340px;max-height:75vh;overflow:auto">
-            <li><h6 class="dropdown-header d-flex justify-content-between align-items-center mb-0">
-              <span>Recent jobs</span>
-              <a href="/jobs" class="small text-decoration-none">All / Run&nbsp;&rarr;</a></h6></li>
-            <li><hr class="dropdown-divider my-1"></li>
-            <li><div id="recent-jobs-menu" class="px-3 py-2 text-muted small">Loading&hellip;</div></li>
-          </ul>
-        </li>
+      <div class="nav-section">
+        <div class="nav-section-title">infrastructure</div>
+        <a class="nav-link-item {{ 'active' if active_nav == 'hosts' }}" href="/hosts">
+          <span class="nav-ico">{{ icon('server') }}</span> Hosts</a>
+      </div>
 
-        {% if current_role == 'admin' %}
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Administration</a>
-          <ul class="dropdown-menu">
-            <li><h6 class="dropdown-header">Access control</h6></li>
-            <li><a class="dropdown-item" href="/settings#users">Users &amp; roles</a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><h6 class="dropdown-header">System</h6></li>
-            <li><a class="dropdown-item" href="/settings#system">Update &amp; restart</a></li>
-            <li><a class="dropdown-item" href="/settings#scheduler">Scheduler</a></li>
-            <li><a class="dropdown-item" href="/settings#plugins">Reload plugins</a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="/settings">All settings</a></li>
-          </ul>
-        </li>
-        {% endif %}
-      </ul>
-      <button type="button" class="btn btn-outline-light btn-sm me-3"
-              onclick="location.reload()" title="Refresh this page">↻ Refresh</button>
-      <span class="navbar-text me-3">{{ current_username }}
-        <span class="badge bg-info text-dark">{{ current_role }}</span></span>
-      <form method="post" action="/logout" class="d-inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
-      </form>
+      <div class="nav-section">
+        <div class="nav-section-title">automation</div>
+        <a class="nav-link-item {{ 'active' if active_nav == 'jobs' }}" href="/jobs">
+          <span class="nav-ico">{{ icon('terminal') }}</span> Jobs</a>
+        <a class="nav-link-item {{ 'active' if active_nav == 'schedules' }}" href="/schedules">
+          <span class="nav-ico">{{ icon('clock') }}</span> Schedules</a>
+        <a class="nav-link-item {{ 'active' if active_nav == 'plugins' }}" href="/plugins">
+          <span class="nav-ico">{{ icon('package') }}</span> Plugins</a>
+      </div>
+
+      {% if current_role == 'admin' %}
+      <div class="nav-section">
+        <div class="nav-section-title">system</div>
+        <a class="nav-link-item {{ 'active' if active_nav == 'settings' }}" href="/settings">
+          <span class="nav-ico">{{ icon('settings') }}</span> Settings</a>
+      </div>
+      {% endif %}
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="sidebar-user" title="{{ current_username }} · {{ current_role }}">
+        <span class="nav-ico text-accent-2">{{ icon('cpu') }}</span>
+        <span class="su-name">{{ current_username }}</span>
+        <span class="st {{ 'st-warn' if current_role == 'admin' else 'st-idle' }}">{{ current_role }}</span>
+      </div>
+      <div class="sidebar-foot-actions">
+        {{ theme_toggle() }}
+        <button type="button" class="icon-btn" onclick="location.reload()" title="Refresh page">{{ icon('refresh') }}</button>
+        <form method="post" action="/logout" class="ms-auto m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="icon-btn" type="submit" title="Logout">{{ icon('log-out') }}</button>
+        </form>
+      </div>
     </div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+  <div class="app-main">
+    {# ---- Mobile-only top bar (hamburger + brand) ---- #}
+    <header class="topbar">
+      <button type="button" class="icon-btn" id="sidebar-open" aria-label="Open menu">{{ icon('menu') }}</button>
+      <span class="tb-brand"><span class="brand-prompt">&gt;_</span> {{ instance_name or app_name }}</span>
+      <span class="ms-auto">{{ theme_toggle() }}</span>
+    </header>
+
+    <main class="app-content">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-top mt-auto py-3 text-center small">
+      <a href="{{ app_repo_url }}" target="_blank" rel="noopener noreferrer" class="link-secondary">
+        {{ instance_name or app_name }} on GitHub</a>
+      <span class="mx-1">·</span>v{{ app_version }}
+    </footer>
   </div>
-</nav>
-{% endif %}
+</div>
 
-<main class="container-fluid px-4 pb-4">
-  {% block content %}{% endblock %}
-</main>
-
-<footer class="border-top mt-auto py-3 text-center text-muted small">
-  <a href="{{ app_repo_url }}" target="_blank" rel="noopener noreferrer"
-     class="link-secondary text-decoration-none">
-    <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"
-         class="align-text-bottom me-1" aria-hidden="true">
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
-        0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01
-        1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
-        0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27
-        2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82
-        1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01
-        2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
-    </svg>{{ instance_name or app_name }} on GitHub</a>
-  <span class="mx-1">·</span>v{{ app_version }}
-</footer>
-
-{% if current_username %}
-{# Reusable confirmation modal for destructive / state-changing actions.        #}
-{# Trigger from any element with data-confirm + data-action (POST endpoint):     #}
-{#   <button data-action="/x/1/delete" data-confirm="Delete X?"                  #}
-{#           data-title="Delete" data-ok="Delete" data-ok-class="btn-danger">    #}
+{# ---- Reusable confirmation modal for destructive / state-changing actions. --
+   Trigger from any element with data-confirm + data-action (POST endpoint):
+     <button data-action="/x/1/delete" data-confirm="Delete X?"
+             data-title="Delete" data-ok="Delete" data-ok-class="btn-danger"> #}
 <div class="modal fade" id="confirm-modal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <form class="modal-content" method="post" id="confirm-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="modal-header">
-        <h5 class="modal-title" id="confirm-title">Confirm</h5>
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <span class="text-accent">{{ icon('alert', 20) }}</span><span id="confirm-title">Confirm</span></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body" id="confirm-body">Are you sure?</div>
@@ -117,7 +133,9 @@
     </form>
   </div>
 </div>
+
 <script>
+// Confirmation modal wiring (unchanged behaviour, restyled markup).
 document.addEventListener('click', function (ev) {
   const t = ev.target.closest('[data-confirm]');
   if (!t) return;
@@ -130,7 +148,38 @@ document.addEventListener('click', function (ev) {
   ok.className = 'btn ' + (t.getAttribute('data-ok-class') || 'btn-danger');
   bootstrap.Modal.getOrCreateInstance(document.getElementById('confirm-modal')).show();
 });
+
+// Theme toggle: flip data-theme + data-bs-theme, persist, swap the icon.
+(function () {
+  function syncIcons() {
+    const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+    document.querySelectorAll('#theme-toggle .t-dark').forEach(e => e.hidden = !dark);
+    document.querySelectorAll('#theme-toggle .t-light').forEach(e => e.hidden = dark);
+  }
+  document.addEventListener('click', function (ev) {
+    if (!ev.target.closest('#theme-toggle')) return;
+    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    document.documentElement.setAttribute('data-bs-theme', next);
+    localStorage.setItem('theme', next);
+    syncIcons();
+  });
+  syncIcons();
+})();
+
+// Mobile sidebar drawer.
+(function () {
+  const open = document.getElementById('sidebar-open');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (open) open.addEventListener('click', () => document.body.classList.add('sidebar-open'));
+  if (backdrop) backdrop.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+})();
 </script>
+{% else %}
+{# Unauthenticated pages (login / setup / error): no shell, just centred content. #}
+<main class="app-content">
+  {% block content_anon %}{{ self.content() }}{% endblock %}
+</main>
 {% endif %}
 </body>
 </html>

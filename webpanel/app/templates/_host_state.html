@@ -2,19 +2,19 @@
    and the /hosts/states live-refresh endpoint so both look identical.
    Expects `st` (HostState or None) and `live` ('checking'|'applying'|None). #}
 {% if live == 'checking' %}
-  <span class="badge bg-info text-dark">
+  <span class="st st-info">
     <span class="spinner-border spinner-border-sm" style="--bs-spinner-width:.7em;--bs-spinner-height:.7em" role="status" aria-hidden="true"></span>
     Checking…</span>
 {% elif live == 'applying' %}
-  <span class="badge bg-warning text-dark">
+  <span class="st st-warn">
     <span class="spinner-border spinner-border-sm" style="--bs-spinner-width:.7em;--bs-spinner-height:.7em" role="status" aria-hidden="true"></span>
     Applying…</span>
 {% elif st and st.config_status == 'out_of_date' %}
-  <span class="badge bg-warning text-dark">Out of date{% if st.pending_changes %} ({{ st.pending_changes }}){% endif %}</span>
+  <span class="st st-warn">Out of date{% if st.pending_changes %} ({{ st.pending_changes }}){% endif %}</span>
 {% elif st and st.config_status == 'updated' %}
-  <span class="badge bg-success">Updated</span>
+  <span class="st st-ok">Updated</span>
 {% else %}
-  <span class="badge bg-secondary">Unknown</span>
+  <span class="st st-idle">Unknown</span>
 {% endif %}
 {% if live %}
   <div class="text-muted small">in progress…</div>

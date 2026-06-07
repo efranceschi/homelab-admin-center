@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block nav_active %}plugins{% endblock %}
 {% block title %}Configure {{ lp.name }} · {{ app_name }}{% endblock %}
 {% block content %}
 <nav aria-label="breadcrumb"><ol class="breadcrumb">
-  <li class="breadcrumb-item"><a href="/plugins">Plugins</a></li>
-  <li class="breadcrumb-item active">{{ lp.name }}</li>
+  <li class="breadcrumb-item"><a href="/plugins">plugins</a></li>
+  <li class="breadcrumb-item active">{{ lp.id }}</li>
 </ol></nav>
 
 <div class="row"><div class="col-lg-7">
@@ -49,7 +51,7 @@
       </div>
       {% endfor %}
       {% if current_role == 'admin' %}
-      <button class="btn btn-primary">Save configuration</button>
+      <button class="btn btn-primary"><span class="btn-ico">{{ icon('check', 14) }}</span> Save configuration</button>
       {% else %}<div class="alert alert-info py-2 mb-0">Viewers cannot edit configuration.</div>{% endif %}
     </form>
   </div></div>
