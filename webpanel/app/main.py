@@ -10,7 +10,7 @@ from . import config, crypto
 from .auth import install_redirect_handler
 from .db import init_db, session_scope
 from .plugins import registry, sync_to_db
-from .routers import dashboard, hosts, jobs as jobs_router, plugins as plugins_router
+from .routers import dashboard, groups as groups_router, hosts, jobs as jobs_router, plugins as plugins_router
 from .routers import auth as auth_router
 from .routers import schedules as schedules_router
 from .routers import settings as settings_router
@@ -63,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router.router)
     app.include_router(dashboard.router)
     app.include_router(hosts.router)
+    app.include_router(groups_router.router)
     app.include_router(plugins_router.router)
     app.include_router(jobs_router.router)
     app.include_router(schedules_router.router)

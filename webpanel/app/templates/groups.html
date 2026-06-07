@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block nav_active %}groups{% endblock %}
+{% block autorefresh %}1{% endblock %}
+{% block title %}Groups · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="page-head"><span class="ph-icon">{{ icon('box', 20) }}</span><h4>Groups</h4></div>
+  {% if current_role == 'admin' %}
+  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-group-modal">
+    <span class="btn-ico">{{ icon('plus', 14) }}</span> Add group</button>
+  {% endif %}
+</div>
+<p class="text-muted">A group can contain hosts and other groups (nested). Groups
+  can be used as run targets and to scope plugin configuration.</p>
+
+<div class="card">
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr>
+      <th>Name</th><th>Description</th>
+      <th class="text-end">Hosts</th><th class="text-end">Subgroups</th>
+      <th class="text-end">Effective hosts</th><th class="text-end">Actions</th>
+    </tr></thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td><a href="/groups/{{ it.g.id }}" class="mono">{{ it.g.name }}</a></td>
+        <td class="small text-muted">{{ it.g.description or '—' }}</td>
+        <td class="cell-num">{{ it.hosts }}</td>
+        <td class="cell-num">{{ it.subgroups }}</td>
+        <td class="cell-num">{{ it.effective }}</td>
+        <td class="text-end text-nowrap">
+          <a href="/groups/{{ it.g.id }}" class="btn btn-sm btn-outline-primary" title="Edit group">{{ icon('settings', 14) }}</a>
+          {% if current_role == 'admin' %}
+          <button type="button" class="btn btn-sm btn-outline-danger" title="Delete group"
+                  data-action="/groups/{{ it.g.id }}/delete"
+                  data-title="Delete group" data-ok="Delete"
+                  data-confirm="Delete group “{{ it.g.name }}”? Membership edges are removed; hosts and subgroups are not deleted.">{{ icon('trash', 14) }}</button>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="text-muted">No groups yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+{% if current_role == 'admin' %}
+{# ---- Add group modal ---------------------------------------------------- #}
+<div class="modal fade" id="add-group-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="/groups">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="modal-header">
+        <h5 class="modal-title">New group</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2"><label class="form-label">Name</label>
+          <input class="form-control form-control-sm mono" name="name" required autofocus></div>
+        <div class="mb-2"><label class="form-label">Description <span class="text-muted small">(optional)</span></label>
+          <input class="form-control form-control-sm" name="description"></div>
+        <p class="text-muted small mb-0">Add hosts and subgroups on the next screen.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary">Create group</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

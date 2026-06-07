@@ -96,6 +96,20 @@ class HostGroup(Base):
     servers: Mapped[list[Server]] = relationship(
         secondary="host_group_members", back_populates="groups"
     )
+    # Nested groups: a group may contain other groups (children) and be
+    # contained by other groups (parents). Cycle prevention lives in app/groups.py.
+    children: Mapped[list["HostGroup"]] = relationship(
+        secondary="host_group_children",
+        primaryjoin="HostGroup.id == HostGroupChild.parent_group_id",
+        secondaryjoin="HostGroup.id == HostGroupChild.child_group_id",
+        back_populates="parents",
+    )
+    parents: Mapped[list["HostGroup"]] = relationship(
+        secondary="host_group_children",
+        primaryjoin="HostGroup.id == HostGroupChild.child_group_id",
+        secondaryjoin="HostGroup.id == HostGroupChild.parent_group_id",
+        back_populates="children",
+    )
 
 
 class HostGroupMember(Base):
@@ -108,6 +122,21 @@ class HostGroupMember(Base):
     )
     server_id: Mapped[int] = mapped_column(
         ForeignKey("servers.id", ondelete="CASCADE")
+    )
+
+
+class HostGroupChild(Base):
+    """Self-referential edge: ``parent_group`` contains ``child_group``."""
+
+    __tablename__ = "host_group_children"
+    __table_args__ = (UniqueConstraint("parent_group_id", "child_group_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    parent_group_id: Mapped[int] = mapped_column(
+        ForeignKey("host_groups.id", ondelete="CASCADE")
+    )
+    child_group_id: Mapped[int] = mapped_column(
+        ForeignKey("host_groups.id", ondelete="CASCADE")
     )
 
 
