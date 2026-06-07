@@ -631,6 +631,13 @@ hr { border-color: var(--border-subtle); opacity: 1; }
 /* Group of flat icon buttons sitting in a table's Actions column. */
 .act-group { display: inline-flex; align-items: center; gap: .15rem; justify-content: flex-end; }
 
+/* Busy state for a button whose form is submitting. The action endpoints await
+   job startup before redirecting, so without this the trigger looks dead for a
+   beat — the JS swaps its content for a spinner (preserving width) and adds this
+   class to block further clicks until the page navigates. */
+.is-busy { pointer-events: none; }
+.is-busy .spinner-border { vertical-align: -.125em; }
+
 /* === COMPONENTS: FORMS ================================================ */
 .form-control, .form-select, .input-group-text {
   background: var(--bg-inset); border: 1px solid var(--border-subtle);

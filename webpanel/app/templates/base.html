@@ -170,8 +170,31 @@ document.addEventListener('click', function (ev) {
   const ok = document.getElementById('confirm-ok');
   ok.textContent = t.getAttribute('data-ok') || 'Confirm';
   ok.className = 'btn ' + (t.getAttribute('data-ok-class') || 'btn-danger');
+  ok.style.minWidth = ''; ok.removeAttribute('aria-busy');
+  document.querySelectorAll('#confirm-modal [data-bs-dismiss="modal"]').forEach(b => { b.disabled = false; });
   bootstrap.Modal.getOrCreateInstance(document.getElementById('confirm-modal')).show();
 });
+
+// Immediate feedback on submit. The check/apply/delete endpoints await job
+// startup before redirecting, so the trigger would otherwise sit inert for a
+// beat and read as frozen. Swap the submitting button's content for a spinner
+// (keeping its width, and leaving name/value attributes intact so a named
+// submitter like mode=apply still posts) until the browser navigates. For the
+// confirm modal, also lock its dismiss controls so it can't be closed mid-flight.
+function hacBusy(btn) {
+  if (!btn || btn.classList.contains('is-busy')) return;
+  btn.style.minWidth = btn.offsetWidth + 'px';
+  btn.classList.add('is-busy');
+  btn.setAttribute('aria-busy', 'true');
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+}
+document.addEventListener('submit', function (ev) {
+  const form = ev.target;
+  hacBusy(ev.submitter || form.querySelector('[type="submit"], button:not([type])'));
+  if (form.id === 'confirm-form') {
+    form.querySelectorAll('[data-bs-dismiss="modal"]').forEach(b => { b.disabled = true; });
+  }
+}, true);
 
 // Theme toggle: flip data-theme + data-bs-theme, persist, swap the icon.
 (function () {
