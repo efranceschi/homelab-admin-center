@@ -63,8 +63,27 @@ def _resolve_targets(db, sched: Schedule) -> list[int]:
 
 def _resolve_plugins(db, sched: Schedule) -> list[str]:
     if sched.plugin_ids.strip():
-        return [p.strip() for p in sched.plugin_ids.split(",") if p.strip()]
-    return [p.key for p in db.scalars(select(Plugin).where(Plugin.enabled.is_(True))).all()]
+        keys = [p.strip() for p in sched.plugin_ids.split(",") if p.strip()]
+    else:
+        keys = [
+            p.key
+            for p in db.scalars(
+                select(Plugin).where(Plugin.enabled.is_(True)).order_by(Plugin.order)
+            ).all()
+        ]
+    # In check mode, drop plugins that can't be dry-run safely: their tasks
+    # report spurious `changed` under --check and flap the host to out_of_date,
+    # which a later panel-triggered check (check-safe surface only) then clears.
+    # Mirror that surface here so both paths agree. See _enabled_plugin_keys.
+    if sched.mode == "check":
+        safe = {
+            p.key
+            for p in db.scalars(
+                select(Plugin).where(Plugin.supports_check_mode.is_(True))
+            ).all()
+        }
+        keys = [k for k in keys if k in safe]
+    return keys
 
 
 # --------------------------------------------------------------------------- #
