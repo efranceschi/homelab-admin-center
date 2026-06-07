@@ -92,6 +92,12 @@ def update_runtime(
     ar = min(3600, ar)
     _set_setting(db, "max_concurrent_jobs", str(mc))
     _set_setting(db, "auto_refresh_seconds", str(ar))
+    # Commit BEFORE dispatching: the JobManager re-reads max_concurrent_jobs in a
+    # fresh session, so the new limit must already be persisted or the immediate
+    # dispatch would still see the old value (and a raised limit wouldn't start
+    # queued jobs until the next event). This is what makes the limit dynamic
+    # with no restart.
+    db.commit()
     set_auto_refresh_seconds(ar)  # refresh the live global (single worker)
     # A freed/raised limit may let queued jobs start immediately.
     job_manager._dispatch()
