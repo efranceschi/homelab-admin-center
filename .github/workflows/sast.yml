@@ -1,0 +1,55 @@
+name: sast
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sast:
+    name: sast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gitleaks scans full history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install SAST tools
+        run: pip install "bandit[toml]" semgrep pip-audit mypy
+
+      # --- Static security analysis (blocking on medium+ severity) ---
+      - name: Bandit
+        run: bandit -c pyproject.toml -r webpanel/app plugins inventory --severity-level medium
+
+      - name: Semgrep
+        run: |
+          semgrep --error --config p/python --config p/security-audit \
+            --exclude collections --exclude .venv --exclude .venv-web \
+            webpanel/app plugins inventory
+
+      # --- Dependency vulnerabilities (blocking) ---
+      - name: pip-audit (panel runtime)
+        run: pip-audit -r webpanel/requirements-web.txt
+
+      - name: pip-audit (ansible framework)
+        run: pip-audit -r requirements.txt
+
+      # --- Secret scanning (blocking) ---
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+      # --- Type checking (advisory until annotations land) ---
+      - name: mypy
+        continue-on-error: true
+        run: mypy

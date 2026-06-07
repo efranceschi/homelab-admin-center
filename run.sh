@@ -51,6 +51,8 @@ rc=${PIPESTATUS[0]}
 set -e
 
 # --- simple rotation: keep the 30 most recent logs ---
+# Log names are program-controlled (run-<timestamp>.log), so ls -t is safe here.
+# shellcheck disable=SC2012
 ls -1t "${LOG_DIR}"/run-*.log 2>/dev/null | tail -n +31 | xargs -r rm -f
 
 echo "[lxc-ansible] finished with rc=${rc}"

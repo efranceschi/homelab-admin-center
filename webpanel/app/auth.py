@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
@@ -70,8 +70,15 @@ def authenticate(db: Session, username: str, password: str) -> User | None:
     user = db.scalar(select(User).where(User.username == username))
     if user is None or not user.is_active:
         return None
-    if user.locked_until and user.locked_until > utcnow():
-        return None
+    if user.locked_until is not None:
+        # SQLite returns naive datetimes; treat stored values as UTC so the
+        # comparison against the tz-aware utcnow() never raises (a locked account
+        # must reject logins cleanly, not 500).
+        locked_until = user.locked_until
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
+        if locked_until > utcnow():
+            return None
     if not verify_password(user.password_hash, password):
         user.failed_logins += 1
         if user.failed_logins >= MAX_FAILED_LOGINS:

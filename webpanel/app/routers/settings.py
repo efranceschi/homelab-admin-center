@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from .. import system
 from ..auth import create_user, current_user, require_admin, verify_csrf
 from ..db import db_dependency
-from ..jobs import DEFAULT_MAX_CONCURRENT, MAX_MAX_CONCURRENT, manager as job_manager
+from ..jobs import DEFAULT_MAX_CONCURRENT, MAX_MAX_CONCURRENT
+from ..jobs import manager as job_manager
 from ..models import AuditLog, Setting, User
 from ..plugins import registry
 from ..scheduler import manager as scheduler_manager
@@ -48,6 +49,7 @@ def settings_home(
         plugins=registry.all(),
         scheduler=scheduler_manager.status(),
         under_systemd=system.under_systemd(),
+        service_user=system.service_user(),
         max_concurrent_jobs=_get_setting_int(db, "max_concurrent_jobs", DEFAULT_MAX_CONCURRENT),
         max_concurrent_cap=MAX_MAX_CONCURRENT,
         auto_refresh_seconds=_get_setting_int(db, "auto_refresh_seconds", 180),

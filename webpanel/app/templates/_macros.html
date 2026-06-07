@@ -34,6 +34,7 @@
 } -%}
 <svg xmlns="http://www.w3.org/2000/svg" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24"
      fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+     {# nosemgrep: python.flask.security.xss.audit.template-unescaped-with-safe.template-unescaped-with-safe -- paths is a static dict of icon SVG path literals, not user data #}
      aria-hidden="true" focusable="false">{{ paths.get(name, '')|safe }}</svg>
 {%- endmacro %}
 

@@ -1,0 +1,26 @@
+# /etc/sudoers.d/hac — least-privilege sudo for the HAC service user.
+#
+# Installed (and validated with `visudo -cf`) by webpanel/install-service.sh.
+# The panel runs as the unprivileged `hac` user; these are the ONLY operations
+# it may perform as root. Keep this list as small as the panel actually needs.
+#
+# NOTE: pct exec and the /bin/sh become grant below are each root-equivalent in
+# effect (pct can run any command inside any container; become runs ansible
+# modules as root on the node). The security win is that the network-facing
+# process itself is no longer root — the escalation surface is just these rules.
+# Drop the /bin/sh rule if you stop managing the Proxmox node via the Local
+# connection.
+#
+# In-app Restart needs NO rule here: the panel owns its own process, so it just
+# exits and systemd (Restart=always) respawns it (see app/system.py).
+
+Defaults:hac !requiretty
+
+# Proxmox container management — host picker (proxmox.py) and the pct connection
+# plugin (plugins/connection/pct.py: exec / push / pull).
+hac ALL=(root) NOPASSWD: /usr/sbin/pct, /usr/bin/pct
+
+# Node self-management: ansible 'become' for Local-connection jobs that
+# configure the Proxmox host itself (timezone/apt/ssh/sssd). Ansible escalates
+# by running `/bin/sh -c ...` via sudo; this is effectively root for those runs.
+hac ALL=(root) NOPASSWD: /bin/sh

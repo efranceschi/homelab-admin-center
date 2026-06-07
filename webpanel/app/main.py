@@ -10,12 +10,15 @@ from . import config, crypto
 from .auth import install_redirect_handler
 from .db import init_db, session_scope
 from .plugins import registry, sync_to_db
-from .routers import dashboard, groups as groups_router, hosts, jobs as jobs_router, plugins as plugins_router
 from .routers import auth as auth_router
+from .routers import dashboard, hosts
+from .routers import groups as groups_router
+from .routers import jobs as jobs_router
+from .routers import plugins as plugins_router
 from .routers import schedules as schedules_router
 from .routers import settings as settings_router
 from .scheduler import manager as scheduler_manager
-from .templating import set_auto_refresh_seconds, set_instance_name, templates
+from .templating import set_auto_refresh_seconds, set_instance_name
 
 
 def _ensure_default_schedules(db) -> None:
@@ -95,7 +98,10 @@ def create_app() -> FastAPI:
                 .values(status="failed", pid=None)
             )
         # Scheduling is owned by the app via a separate child process (no cron).
-        scheduler_manager.ensure_running()
+        # Suppressed under tests/DAST (PANEL_DISABLE_SCHEDULER=1) so booting the
+        # app never spawns the scheduler child.
+        if not config._envflag("PANEL_DISABLE_SCHEDULER"):
+            scheduler_manager.ensure_running()
 
     @app.on_event("shutdown")
     def _shutdown() -> None:

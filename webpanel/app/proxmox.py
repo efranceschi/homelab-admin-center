@@ -9,6 +9,7 @@ Everything here degrades gracefully: off a Proxmox node, without root, or if
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 
@@ -18,6 +19,16 @@ def pct_path() -> str | None:
     return shutil.which("pct") or next(
         (p for p in ("/usr/sbin/pct", "/usr/bin/pct") if shutil.which(p)), None
     )
+
+
+def _pct_argv(pct: str, *args: str) -> list[str]:
+    """Build a pct command line, prefixing ``sudo -n`` when not running as root.
+
+    ``pct`` requires root; the panel runs as the unprivileged ``hac`` user and is
+    granted the command via /etc/sudoers.d/hac. The CLI/root path is unchanged.
+    """
+    base = ["sudo", "-n", pct] if os.geteuid() != 0 else [pct]
+    return base + list(args)
 
 
 def list_containers() -> list[dict[str, str]]:
@@ -31,7 +42,7 @@ def list_containers() -> list[dict[str, str]]:
         return []
     try:
         proc = subprocess.run(
-            [pct, "list"], capture_output=True, text=True, timeout=10
+            _pct_argv(pct, "list"), capture_output=True, text=True, timeout=10
         )
     except (OSError, subprocess.SubprocessError):
         return []
