@@ -425,6 +425,36 @@ hr { border-color: var(--border-subtle); opacity: 1; }
 .job-chip .jc-mode-apply { color: var(--accent-primary); font-weight: 700; }
 .job-chip .jc-mode-check { color: var(--text-muted); }
 
+/* --- Feed list: minimalist one-row-per-item list used by the dashboard's
+   "Needs attention" and "Recent jobs" panels. A coloured status dot carries
+   the signal; everything else stays quiet (mono id/name + muted meta). --- */
+.feed { display: flex; flex-direction: column; }
+.feed-row {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .5rem .9rem; border-bottom: 1px solid var(--border-subtle);
+  text-decoration: none; transition: background .15s ease;
+}
+.feed-row:last-child { border-bottom: 0; }
+.feed-row:hover { background: var(--bg-elevated); }
+.feed-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  flex: 0 0 8px; vertical-align: middle; background: var(--status-idle);
+}
+.feed-dot.s-ok    { background: var(--status-ok); }
+.feed-dot.s-warn  { background: var(--status-warn); }
+.feed-dot.s-error { background: var(--status-error); }
+.feed-dot.s-info  { background: var(--status-info); animation: pulse-cyan 2s ease-in-out infinite; }
+.feed-dot.s-idle  { background: var(--status-idle); }
+.feed-main {
+  font-family: var(--fonts-mono); color: var(--text-primary); font-size: .85rem; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.feed-tag { font-family: var(--fonts-mono); font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; }
+.feed-meta { margin-left: auto; font-family: var(--fonts-mono); font-size: .72rem; color: var(--text-secondary); white-space: nowrap; }
+.feed-more { display: block; text-align: center; padding: .45rem; border-top: 1px solid var(--border-subtle); font-size: .75rem; color: var(--text-secondary); }
+.feed-more:hover { color: var(--accent-secondary); background: var(--bg-elevated); }
+.feed-empty { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: 2.5rem 1rem; font-family: var(--fonts-mono); font-size: .85rem; }
+
 /* === COMPONENTS: BUTTONS ============================================== */
 /* radius 3px keeps buttons reading as toggle switches / keycaps, not bubbles. */
 .btn { border-radius: 3px; font-family: var(--fonts-sans); font-size: .85rem; transition: 150ms ease; display: inline-flex; align-items: center; gap: .4rem; }
