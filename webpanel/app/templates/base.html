@@ -95,11 +95,12 @@
         {# Live job-pool readout — centred in the leftover space between refresh
            and logout. Filled and kept fresh by the poller below; the full
            "N/M running · K queued" phrasing lives in the title tooltip. #}
-        <a href="/jobs" class="queue-indicator is-idle" id="queue-indicator"
-           title="Job activity — running / max concurrent">
+        <a href="/jobs" class="queue-indicator{{ ' is-idle' if not queue_running and not queue_queued }}"
+           id="queue-indicator"
+           title="{{ queue_running }}/{{ queue_max }} running{% if queue_queued %} · {{ queue_queued }} queued{% endif %}">
           <span class="qi-ico">{{ icon('activity', 13) }}</span>
-          <span class="qi-conc"><b id="qi-running">0</b>/<span id="qi-max">1</span></span>
-          <span class="qi-queued" id="qi-queued" hidden>· <b id="qi-queued-n">0</b></span>
+          <span class="qi-conc"><b id="qi-running">{{ queue_running }}</b>/<span id="qi-max">{{ queue_max }}</span></span>
+          <span class="qi-queued" id="qi-queued"{% if not queue_queued %} hidden{% endif %}>· <b id="qi-queued-n">{{ queue_queued }}</b></span>
         </a>
         <form method="post" action="/logout" class="m-0">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

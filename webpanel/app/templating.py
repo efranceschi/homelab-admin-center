@@ -65,6 +65,15 @@ def render(request: Request, name: str, **ctx):
         "current_username": request.session.get("username"),
         "current_role": request.session.get("role"),
     }
+    # Seed the sidebar job-pool indicator from the live manager so its first
+    # paint shows the real running/max (the poller then keeps it fresh). Only
+    # for authenticated renders — the indicator isn't shown to anon pages.
+    if base["current_username"]:
+        from .jobs import manager
+
+        base["queue_running"] = manager.running_count()   # in-memory
+        base["queue_queued"] = manager.queued_count()     # in-memory
+        base["queue_max"] = manager.max_concurrent()      # one PK Setting read
     base.update(ctx)
     # Starlette >=0.29 signature: TemplateResponse(request, name, context).
     return templates.TemplateResponse(request, name, base)
