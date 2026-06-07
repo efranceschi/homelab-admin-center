@@ -257,7 +257,9 @@ hr { border-color: var(--border-subtle); opacity: 1; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .sidebar-foot-actions { display: flex; align-items: center; gap: .4rem; }
-.sidebar-foot-actions .icon-btn { flex: 0 0 auto; }
+/* Everything keeps its size; only the queue readout flexes (see below). The
+   logout control is wrapped in a <form>, so pin direct children, not buttons. */
+.sidebar-foot-actions > * { flex: 0 0 auto; }
 
 /* Always-on job activity readout (running / max concurrent + queued). Grows to
    fill the leftover space between refresh and logout and centres its content
