@@ -1,6 +1,8 @@
 """FastAPI application factory for HomeLab Admin Center (hac)."""
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -44,8 +46,45 @@ def _ensure_default_schedules(db) -> None:
     db.add(Setting(key="drift_schedule_seeded", value="1", value_type="str"))
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application startup/shutdown (replaces the deprecated on_event hooks)."""
+    init_db()
+    warnings = registry.load()
+    for w in warnings:
+        print(f"[hac] plugin warning: {w}")
+    with session_scope() as db:
+        sync_to_db(db)
+        _ensure_default_schedules(db)
+        from .models import Job, Setting
+
+        row = db.get(Setting, "instance_name")
+        set_instance_name(row.value if row else None)
+        ar = db.get(Setting, "auto_refresh_seconds")
+        set_auto_refresh_seconds(ar.value if ar else None)
+        # Reconcile jobs orphaned by a previous process: the in-memory queue
+        # and runtimes are gone after a restart, so anything left running or
+        # queued can never complete — mark it failed so history is truthful.
+        from sqlalchemy import update
+
+        db.execute(
+            update(Job)
+            .where(Job.status.in_(("running", "queued")))
+            .values(status="failed", pid=None)
+        )
+    # Scheduling is owned by the app via a separate child process (no cron).
+    # Suppressed under tests/DAST (PANEL_DISABLE_SCHEDULER=1) so booting the
+    # app never spawns the scheduler child.
+    if not config._envflag("PANEL_DISABLE_SCHEDULER"):
+        scheduler_manager.ensure_running()
+
+    yield
+
+    scheduler_manager.stop()
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
+    app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION, lifespan=lifespan)
 
     app.add_middleware(
         SessionMiddleware,
@@ -71,41 +110,6 @@ def create_app() -> FastAPI:
     app.include_router(jobs_router.router)
     app.include_router(schedules_router.router)
     app.include_router(settings_router.router)
-
-    @app.on_event("startup")
-    def _startup() -> None:
-        init_db()
-        warnings = registry.load()
-        for w in warnings:
-            print(f"[hac] plugin warning: {w}")
-        with session_scope() as db:
-            sync_to_db(db)
-            _ensure_default_schedules(db)
-            from .models import Job, Setting
-
-            row = db.get(Setting, "instance_name")
-            set_instance_name(row.value if row else None)
-            ar = db.get(Setting, "auto_refresh_seconds")
-            set_auto_refresh_seconds(ar.value if ar else None)
-            # Reconcile jobs orphaned by a previous process: the in-memory queue
-            # and runtimes are gone after a restart, so anything left running or
-            # queued can never complete — mark it failed so history is truthful.
-            from sqlalchemy import update
-
-            db.execute(
-                update(Job)
-                .where(Job.status.in_(("running", "queued")))
-                .values(status="failed", pid=None)
-            )
-        # Scheduling is owned by the app via a separate child process (no cron).
-        # Suppressed under tests/DAST (PANEL_DISABLE_SCHEDULER=1) so booting the
-        # app never spawns the scheduler child.
-        if not config._envflag("PANEL_DISABLE_SCHEDULER"):
-            scheduler_manager.ensure_running()
-
-    @app.on_event("shutdown")
-    def _shutdown() -> None:
-        scheduler_manager.stop()
 
     @app.get("/")
     def index(request: Request):
