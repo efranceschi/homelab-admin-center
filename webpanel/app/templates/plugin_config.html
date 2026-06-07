@@ -2,6 +2,8 @@
 {% from "_macros.html" import icon %}
 {% block nav_active %}plugins{% endblock %}
 {% block title %}Configure {{ lp.name }} · {{ app_name }}{% endblock %}
+{% block page_icon %}package{% endblock %}
+{% block page_title %}Configure {{ lp.name }}{% endblock %}
 {% block content %}
 {% set is_group = scope == 'group' %}
 {% set cur_group = (groups | selectattr('id', 'equalto', ref) | first) if is_group else None %}

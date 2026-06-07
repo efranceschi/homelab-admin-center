@@ -185,9 +185,8 @@ hr { border-color: var(--border-subtle); opacity: 1; }
 ::selection { background: var(--accent-glow-cyan); }
 
 /* Page heading used at the top of each view. */
-.page-head { display: flex; align-items: center; gap: .6rem; }
-.page-head h4, .page-head h5 { margin: 0; }
-.page-head .ph-icon { color: var(--accent-secondary); display: inline-flex; }
+/* Page title now lives in the top bar (.topbar-title); the in-content
+   .page-head was removed from templates. */
 
 /* === LAYOUT: APP SHELL / SIDEBAR ======================================= */
 .app-shell { display: flex; min-height: 100vh; }
@@ -259,6 +258,20 @@ hr { border-color: var(--border-subtle); opacity: 1; }
 }
 .sidebar-foot-actions { display: flex; gap: .4rem; }
 
+/* Always-on job activity readout (running / max concurrent + queued). Amber
+   when something is active, muted when idle. Pinned to the bottom-right of the
+   sidebar footer; clicking jumps to /jobs. */
+.queue-indicator {
+  display: flex; align-items: center; justify-content: flex-end; gap: .35rem;
+  font-family: var(--fonts-mono); font-size: .72rem;
+  color: var(--text-secondary); text-decoration: none; padding: .15rem 0;
+}
+.queue-indicator .qi-ico { color: var(--accent-primary); display: inline-flex; }
+.queue-indicator.is-idle { color: var(--text-muted); }
+.queue-indicator.is-idle .qi-ico { color: var(--text-muted); }
+.queue-indicator:hover { color: var(--text-primary); }
+.queue-indicator .qi-queued b { color: var(--accent-primary); }
+
 /* Icon-only square button used in the sidebar footer (theme, refresh, logout). */
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -294,6 +307,15 @@ hr { border-color: var(--border-subtle); opacity: 1; }
   font-family: var(--fonts-mono); font-size: .68rem; color: var(--text-secondary);
 }
 .topbar-identity .ti-host svg { color: var(--accent-secondary); }
+
+/* Page title in the top bar (left). Replaces the per-page in-content heading. */
+.topbar-title { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.topbar-title .tt-icon { color: var(--accent-secondary); display: inline-flex; }
+.topbar-title .tt-text {
+  margin: 0; font-family: var(--fonts-mono); font-weight: 700; font-size: 1rem;
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .app-content { flex: 1 1 auto; padding: 1.25rem 1.5rem; }
@@ -581,6 +603,30 @@ hr { border-color: var(--border-subtle); opacity: 1; }
 .btn-check:checked + .btn-outline-warning {
   background: var(--bg-elevated); border-color: var(--border-active); color: var(--text-primary);
 }
+
+/* Flat, borderless icon action buttons — the single standard for row/toolbar
+   actions. No border or fill at rest; colour on the icon carries the semantic
+   (primary = state mutation, secondary = navigate/inspect, danger = destructive),
+   with a subtle tinted fill on hover. Always pair with a title/aria-label. */
+.act-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; line-height: 0;
+  background: transparent; border: 0; border-radius: 4px;
+  color: var(--text-secondary); cursor: pointer; text-decoration: none;
+  transition: background 150ms ease, color 150ms ease;
+}
+.act-btn:hover, .act-btn:focus-visible { background: var(--bg-elevated); color: var(--text-primary); }
+.act-btn:disabled { opacity: .45; cursor: not-allowed; }
+.act-btn-primary { color: var(--accent-primary); }
+.act-btn-primary:hover, .act-btn-primary:focus-visible { background: var(--accent-glow-amber); color: var(--accent-primary); }
+.act-btn-secondary { color: var(--accent-secondary); }
+.act-btn-secondary:hover, .act-btn-secondary:focus-visible { background: var(--accent-glow-cyan); color: var(--accent-secondary); }
+.act-btn-success { color: var(--status-ok); }
+.act-btn-success:hover, .act-btn-success:focus-visible { background: var(--fill-ok); color: var(--status-ok); }
+.act-btn-danger { color: var(--status-error); }
+.act-btn-danger:hover, .act-btn-danger:focus-visible { background: var(--fill-error); color: var(--status-error); }
+/* Group of flat icon buttons sitting in a table's Actions column. */
+.act-group { display: inline-flex; align-items: center; gap: .15rem; justify-content: flex-end; }
 
 /* === COMPONENTS: FORMS ================================================ */
 .form-control, .form-select, .input-group-text {

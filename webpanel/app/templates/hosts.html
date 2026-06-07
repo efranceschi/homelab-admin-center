@@ -3,9 +3,9 @@
 {% block nav_active %}hosts{% endblock %}
 {% block autorefresh %}1{% endblock %}
 {% block title %}Hosts · {{ app_name }}{% endblock %}
+{% block page_icon %}server{% endblock %}
+{% block page_title %}Infrastructure{% endblock %}
 {% block content %}
-<div class="page-head mb-3"><span class="ph-icon">{{ icon('server', 20) }}</span><h4>Infrastructure</h4></div>
-
 <ul class="nav nav-tabs" id="hostsTab" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="tab-hosts-btn" data-bs-toggle="tab" data-bs-target="#tab-hosts"
@@ -22,18 +22,21 @@
   <div class="tab-pane fade show active" id="tab-hosts" role="tabpanel">
     <div class="d-flex justify-content-between align-items-center p-2 px-3 border-bottom">
       <span class="text-muted small">Encrypted connections to your managed hosts</span>
-      <div class="d-flex gap-2">
-        <button type="button" class="btn btn-sm btn-outline-primary"
+      <div class="act-group">
+        <button type="button" class="act-btn act-btn-secondary"
                 data-action="/hosts/check-all"
                 data-title="Check all hosts" data-ok="Run check" data-ok-class="btn-primary"
-                data-confirm="Run a configuration drift check (--check) against all enabled hosts? This starts one job."><span class="btn-ico">{{ icon('search', 14) }}</span> Check all</button>
+                data-confirm="Run a configuration drift check (--check) against all enabled hosts? This starts one job."
+                title="Check all hosts" aria-label="Check all hosts">{{ icon('search', 16) }}</button>
         {% if current_role == 'admin' and ood_count %}
-        <button type="button" class="btn btn-sm btn-warning"
+        <button type="button" class="act-btn act-btn-primary"
                 data-action="/hosts/apply-all"
                 data-title="Apply all out-of-date hosts" data-ok="Apply all" data-ok-class="btn-warning"
-                data-confirm="Apply configuration to the {{ ood_count }} host(s) flagged out of date by the last check? This starts one apply job."><span class="btn-ico">{{ icon('play', 14) }}</span> Apply all ({{ ood_count }})</button>
+                data-confirm="Apply configuration to the {{ ood_count }} host(s) flagged out of date by the last check? This starts one apply job."
+                title="Apply all out-of-date hosts ({{ ood_count }})" aria-label="Apply all out-of-date hosts ({{ ood_count }})">{{ icon('play', 16) }}</button>
         {% endif %}
-        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-host-modal"><span class="btn-ico">{{ icon('plus', 14) }}</span> Add host</button>
+        <button class="act-btn act-btn-primary" data-bs-toggle="modal" data-bs-target="#add-host-modal"
+                title="Add host" aria-label="Add host">{{ icon('plus', 16) }}</button>
       </div>
     </div>
 
@@ -111,38 +114,31 @@
           <td>
             <form method="post" action="/hosts/{{ s.id }}/toggle" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button class="btn btn-sm {{ 'btn-success' if s.enabled else 'btn-outline-secondary' }}">
-                {{ 'on' if s.enabled else 'off' }}</button>
+              <button class="act-btn {{ 'act-btn-success' if s.enabled else '' }}"
+                      title="{{ 'Enabled — click to disable' if s.enabled else 'Disabled — click to enable' }}"
+                      aria-label="{{ 'Disable host' if s.enabled else 'Enable host' }}">{{ icon('power', 16) }}</button>
             </form>
           </td>
           <td class="text-end text-nowrap">
+            <span class="act-group">
             {% if st and st.config_status == 'out_of_date' and current_role == 'admin' %}
-            {# Out of date: offer Apply as the default action, with Check in the dropdown. #}
-            <div class="btn-group" role="group">
-              <button type="button" class="btn btn-sm btn-warning"
-                      data-action="/hosts/{{ s.id }}/apply"
-                      data-title="Apply host" data-ok="Apply" data-ok-class="btn-warning"
-                      data-confirm="Apply configuration to “{{ s.name }}” to bring it up to date?">Apply</button>
-              <button type="button" class="btn btn-sm btn-warning dropdown-toggle dropdown-toggle-split"
-                      data-bs-toggle="dropdown" aria-expanded="false">
-                <span class="visually-hidden">Toggle action</span></button>
-              <ul class="dropdown-menu dropdown-menu-end">
-                <li><button type="button" class="dropdown-item"
-                        data-action="/hosts/{{ s.id }}/check"
-                        data-title="Check host" data-ok="Run check" data-ok-class="btn-primary"
-                        data-confirm="Run a drift check (--check) against “{{ s.name }}”?">Check</button></li>
-              </ul>
-            </div>
-            {% else %}
-            <button type="button" class="btn btn-sm btn-outline-primary"
+            <button type="button" class="act-btn act-btn-primary"
+                    data-action="/hosts/{{ s.id }}/apply"
+                    data-title="Apply host" data-ok="Apply" data-ok-class="btn-warning"
+                    data-confirm="Apply configuration to “{{ s.name }}” to bring it up to date?"
+                    title="Apply configuration" aria-label="Apply configuration to {{ s.name }}">{{ icon('play', 16) }}</button>
+            {% endif %}
+            <button type="button" class="act-btn act-btn-secondary"
                     data-action="/hosts/{{ s.id }}/check"
                     data-title="Check host" data-ok="Run check" data-ok-class="btn-primary"
-                    data-confirm="Run a drift check (--check) against “{{ s.name }}”?">Check</button>
-            {% endif %}
-            <button type="button" class="btn btn-sm btn-outline-danger" title="Delete host"
+                    data-confirm="Run a drift check (--check) against “{{ s.name }}”?"
+                    title="Check (drift check)" aria-label="Check {{ s.name }}">{{ icon('search', 16) }}</button>
+            <button type="button" class="act-btn act-btn-danger"
                     data-action="/hosts/{{ s.id }}/delete"
                     data-title="Delete host" data-ok="Delete"
-                    data-confirm="Delete host “{{ s.name }}”? This cannot be undone.">{{ icon('trash', 14) }}</button>
+                    data-confirm="Delete host “{{ s.name }}”? This cannot be undone."
+                    title="Delete host" aria-label="Delete host {{ s.name }}">{{ icon('trash', 16) }}</button>
+            </span>
           </td>
         </tr>
       {% else %}
@@ -158,7 +154,8 @@
   <div class="tab-pane fade" id="tab-creds" role="tabpanel">
     <div class="d-flex justify-content-between align-items-center p-2 px-3 border-bottom">
       <span class="text-muted small">Secrets encrypted at rest</span>
-      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-cred-modal"><span class="btn-ico">{{ icon('plus', 14) }}</span> Add credential</button>
+      <button class="act-btn act-btn-primary" data-bs-toggle="modal" data-bs-target="#add-cred-modal"
+              title="Add credential" aria-label="Add credential">{{ icon('plus', 16) }}</button>
     </div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
       <thead><tr><th>Name</th><th>Type</th><th class="text-end">Actions</th></tr></thead>
@@ -167,10 +164,11 @@
         <tr>
           <td>{{ c.name }}</td><td>{{ c.type }}</td>
           <td class="text-end">
-            <button type="button" class="btn btn-sm btn-outline-danger" title="Delete credential"
+            <button type="button" class="act-btn act-btn-danger"
                     data-action="/hosts/credentials/{{ c.id }}/delete"
                     data-title="Delete credential" data-ok="Delete"
-                    data-confirm="Delete credential “{{ c.name }}”? Hosts using it will lose access.">{{ icon('trash', 14) }}</button>
+                    data-confirm="Delete credential “{{ c.name }}”? Hosts using it will lose access."
+                    title="Delete credential" aria-label="Delete credential {{ c.name }}">{{ icon('trash', 16) }}</button>
           </td>
         </tr>
       {% else %}

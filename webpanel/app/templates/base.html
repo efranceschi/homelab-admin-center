@@ -6,6 +6,10 @@
    The interval comes from the auto_refresh_seconds global (Settings; 0 = off). #}
 {% set page_autorefresh %}{% block autorefresh %}{% endblock %}{% endset %}
 {% set page_autorefresh = page_autorefresh|trim %}
+{# Per-page heading shown in the top bar: an icon name + the title text. Pages
+   set them via {% block page_icon %}…{% endblock %} and {% block page_title %}…. #}
+{% set page_icon %}{% block page_icon %}{% endblock %}{% endset %}
+{% set page_icon = page_icon|trim %}
 <!doctype html>
 <html lang="en" data-theme="dark" data-bs-theme="dark">
 <head>
@@ -93,6 +97,13 @@
           <button class="icon-btn" type="submit" title="Logout">{{ icon('log-out') }}</button>
         </form>
       </div>
+      {# Live job-pool readout — filled and kept fresh by the poller below. #}
+      <a href="/jobs" class="queue-indicator is-idle" id="queue-indicator"
+         title="Job activity — running / max concurrent">
+        <span class="qi-ico">{{ icon('activity', 13) }}</span>
+        <span class="qi-conc"><b id="qi-running">0</b>/<span id="qi-max">1</span></span>
+        <span class="qi-queued" id="qi-queued" hidden>· <b id="qi-queued-n">0</b> queued</span>
+      </a>
     </div>
   </aside>
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
@@ -102,6 +113,10 @@
          right, stacked over two lines (instance name + hostname badge). ---- #}
     <header class="topbar">
       <button type="button" class="icon-btn tb-burger" id="sidebar-open" aria-label="Open menu">{{ icon('menu') }}</button>
+      <div class="topbar-title">
+        {% if page_icon %}<span class="tt-icon">{{ icon(page_icon, 18) }}</span>{% endif %}
+        <h1 class="tt-text">{% block page_title %}{% endblock %}</h1>
+      </div>
       <div class="topbar-identity">
         <span class="ti-name">{{ instance_name or app_name }}</span>
         <span class="ti-host">{{ icon('server', 11) }} {{ hostname }}</span>
@@ -202,6 +217,39 @@ document.addEventListener('click', function (ev) {
     location.reload();
   }
   setTimeout(tick, ms);
+})();
+
+// Sidebar queue indicator: poll /jobs/queue-status and show running/max + queued.
+// Fast cadence (2s) while the pool is busy, slow (10s) when idle; paused while
+// the tab is hidden. Mirrors the hosts-page polling pattern.
+(function () {
+  const root = document.getElementById('queue-indicator');
+  if (!root) return;
+  const elRun = document.getElementById('qi-running');
+  const elMax = document.getElementById('qi-max');
+  const elQ = document.getElementById('qi-queued');
+  const elQn = document.getElementById('qi-queued-n');
+  const BUSY_MS = 2000, IDLE_MS = 10000;
+
+  async function poll() {
+    let busy = false;
+    try {
+      const r = await fetch('/jobs/queue-status', { headers: { 'X-Requested-With': 'fetch' } });
+      if (r.ok) {
+        const d = await r.json();
+        busy = !!d.busy;
+        elRun.textContent = d.running;
+        elMax.textContent = d.max_concurrent;
+        if (d.queued > 0) { elQn.textContent = d.queued; elQ.hidden = false; }
+        else { elQ.hidden = true; }
+        root.classList.toggle('is-idle', d.running === 0 && d.queued === 0);
+        root.title = d.running + '/' + d.max_concurrent + ' running'
+          + (d.queued ? ' · ' + d.queued + ' queued' : '');
+      }
+    } catch (e) { /* transient; retry next tick */ }
+    setTimeout(poll, busy ? BUSY_MS : IDLE_MS);
+  }
+  if (!document.hidden) poll(); else document.addEventListener('visibilitychange', poll, { once: true });
 })();
 </script>
 {% else %}

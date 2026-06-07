@@ -58,6 +58,20 @@ def jobs_recent(
     return render(request, "_recent_jobs.html", jobs=jobs)
 
 
+@router.get("/queue-status")
+def queue_status(user: User = Depends(current_user)):
+    """JSON snapshot of the job pool, polled by the sidebar queue indicator.
+
+    Declared before /{job_id} so the literal path is not captured by the
+    path-param route."""
+    return {
+        "running": manager.running_count(),
+        "queued": manager.queued_count(),
+        "max_concurrent": manager.max_concurrent(),
+        "busy": manager.is_busy(),
+    }
+
+
 @router.post("/run", dependencies=[Depends(verify_csrf)])
 async def run_job(
     request: Request,

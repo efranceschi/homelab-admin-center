@@ -3,22 +3,25 @@
 {% block nav_active %}schedules{% endblock %}
 {% block autorefresh %}1{% endblock %}
 {% block title %}Schedule · {{ app_name }}{% endblock %}
+{% block page_icon %}clock{% endblock %}
+{% block page_title %}Schedules{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div class="page-head"><span class="ph-icon">{{ icon('clock', 20) }}</span><h4>Schedules</h4></div>
-  <div>
-    <span class="me-2">Scheduler:
-      {% if scheduler.running %}<span class="st st-ok">{{ icon('activity', 12) }} running (pid {{ scheduler.pid }})</span>
-      {% else %}<span class="st st-idle">stopped</span>{% endif %}</span>
-    {% if current_role == 'admin' %}
+{% set sched_icons = {'start': 'play', 'stop': 'power', 'restart': 'refresh'} %}
+{% set sched_cls = {'start': 'act-btn-primary', 'stop': 'act-btn-danger', 'restart': 'act-btn-secondary'} %}
+<div class="d-flex justify-content-end align-items-center gap-2 mb-3">
+  <span>Scheduler:
+    {% if scheduler.running %}<span class="st st-ok">{{ icon('activity', 12) }} running (pid {{ scheduler.pid }})</span>
+    {% else %}<span class="st st-idle">stopped</span>{% endif %}</span>
+  {% if current_role == 'admin' %}
+  <span class="act-group">
     {% for act in ['start', 'stop', 'restart'] %}
-    <form method="post" action="/schedules/scheduler/{{ act }}" class="d-inline">
+    <form method="post" action="/schedules/scheduler/{{ act }}" class="d-inline m-0">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-sm btn-outline-secondary">{{ act }}</button>
+      <button class="act-btn {{ sched_cls[act] }}" title="{{ act|capitalize }} scheduler" aria-label="{{ act|capitalize }} scheduler">{{ icon(sched_icons[act], 16) }}</button>
     </form>
     {% endfor %}
-    {% endif %}
-  </div>
+  </span>
+  {% endif %}
 </div>
 <p class="text-muted">Recurring runs are executed by the application's own scheduler
   (a separate child process) — not cron.</p>
@@ -27,7 +30,8 @@
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>Defined schedules</span>
     {% if current_role == 'admin' %}
-    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-schedule-modal"><span class="btn-ico">{{ icon('plus', 14) }}</span> New schedule</button>
+    <button class="act-btn act-btn-primary" data-bs-toggle="modal" data-bs-target="#add-schedule-modal"
+            title="New schedule" aria-label="New schedule">{{ icon('plus', 16) }}</button>
     {% endif %}
   </div>
   <div class="table-responsive"><table class="table table-sm align-middle mb-0">
@@ -43,14 +47,16 @@
         <td>
           <form method="post" action="/schedules/{{ s.id }}/toggle" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="btn btn-sm {{ 'btn-success' if s.enabled else 'btn-outline-secondary' }}">
-              {{ 'on' if s.enabled else 'off' }}</button></form>
+            <button class="act-btn {{ 'act-btn-success' if s.enabled else '' }}"
+                    title="{{ 'Enabled — click to disable' if s.enabled else 'Disabled — click to enable' }}"
+                    aria-label="{{ 'Disable schedule' if s.enabled else 'Enable schedule' }}">{{ icon('power', 16) }}</button></form>
         </td>
         <td class="text-end">
-          <button type="button" class="btn btn-sm btn-outline-danger" title="Delete schedule"
+          <button type="button" class="act-btn act-btn-danger"
                   data-action="/schedules/{{ s.id }}/delete"
                   data-title="Delete schedule" data-ok="Delete"
-                  data-confirm="Delete schedule “{{ s.name }}”?">{{ icon('trash', 14) }}</button>
+                  data-confirm="Delete schedule “{{ s.name }}”?"
+                  title="Delete schedule" aria-label="Delete schedule {{ s.name }}">{{ icon('trash', 16) }}</button>
         </td>
       </tr>
     {% else %}<tr><td colspan="6" class="text-muted">No schedules yet.</td></tr>{% endfor %}

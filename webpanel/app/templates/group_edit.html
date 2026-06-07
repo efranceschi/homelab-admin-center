@@ -2,6 +2,8 @@
 {% from "_macros.html" import icon %}
 {% block nav_active %}groups{% endblock %}
 {% block title %}{{ g.name }} · Groups · {{ app_name }}{% endblock %}
+{% block page_icon %}box{% endblock %}
+{% block page_title %}{{ g.name }}{% endblock %}
 {% block content %}
 <nav aria-label="breadcrumb"><ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/groups">groups</a></li>

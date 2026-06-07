@@ -2,6 +2,8 @@
 {% from "_macros.html" import mode_badge, icon %}
 {% block nav_active %}jobs{% endblock %}
 {% block title %}Job #{{ job.id }} · {{ app_name }}{% endblock %}
+{% block page_icon %}terminal{% endblock %}
+{% block page_title %}Job #{{ job.id }}{% endblock %}
 {% block content %}
 <nav aria-label="breadcrumb"><ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/jobs">jobs</a></li>

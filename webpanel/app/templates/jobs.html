@@ -3,11 +3,12 @@
 {% block nav_active %}jobs{% endblock %}
 {% block autorefresh %}1{% endblock %}
 {% block title %}Run · {{ app_name }}{% endblock %}
+{% block page_icon %}terminal{% endblock %}
+{% block page_title %}Run Ansible{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div class="page-head"><span class="ph-icon">{{ icon('terminal', 20) }}</span><h4>Run Ansible</h4></div>
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#run-modal">
-    <span class="btn-ico">{{ icon('play', 14) }}</span> New run</button>
+<div class="d-flex justify-content-end mb-3">
+  <button class="act-btn act-btn-primary" data-bs-toggle="modal" data-bs-target="#run-modal"
+          title="New run" aria-label="New run">{{ icon('play', 16) }}</button>
 </div>
 
 {% if running or queued %}
@@ -39,24 +40,29 @@
         </a>
       </td>
       <td class="text-end">
+        <span class="act-group">
         {% if j.status in ['failed', 'cancelled'] and (j.mode != 'apply' or current_role == 'admin') %}
-        <button type="button" class="btn btn-outline-primary btn-sm py-0"
+        <button type="button" class="act-btn act-btn-secondary"
                 data-action="/jobs/{{ j.id }}/retry"
                 data-title="Retry job" data-ok="Retry" data-ok-class="btn-primary"
-                data-confirm="Re-run job #{{ j.id }} ({{ j.mode }}) on {{ j.target_ref }}?">Retry</button>
+                data-confirm="Re-run job #{{ j.id }} ({{ j.mode }}) on {{ j.target_ref }}?"
+                title="Retry job" aria-label="Retry job">{{ icon('refresh', 16) }}</button>
         {% elif j.status == 'success' and (j.mode != 'apply' or current_role == 'admin') %}
         {% if j.mode == 'check' and current_role == 'admin' %}
         {# Promote a successful dry run into a separate apply job. #}
-        <button type="button" class="btn btn-warning btn-sm py-0"
+        <button type="button" class="act-btn act-btn-primary"
                 data-action="/jobs/{{ j.id }}/apply"
                 data-title="Apply changes" data-ok="Apply" data-ok-class="btn-warning"
-                data-confirm="Apply the changes previewed by check #{{ j.id }} on {{ j.target_ref }}? This starts a new apply job.">Apply</button>
+                data-confirm="Apply the changes previewed by check #{{ j.id }} on {{ j.target_ref }}? This starts a new apply job."
+                title="Apply previewed changes" aria-label="Apply previewed changes">{{ icon('play', 16) }}</button>
         {% endif %}
-        <button type="button" class="btn btn-outline-primary btn-sm py-0"
+        <button type="button" class="act-btn act-btn-secondary"
                 data-action="/jobs/{{ j.id }}/retry"
                 data-title="Re-run job" data-ok="Re-run" data-ok-class="btn-primary"
-                data-confirm="Re-run job #{{ j.id }} ({{ j.mode }}) on {{ j.target_ref }}?">Re-run</button>
+                data-confirm="Re-run job #{{ j.id }} ({{ j.mode }}) on {{ j.target_ref }}?"
+                title="Re-run job" aria-label="Re-run job">{{ icon('refresh', 16) }}</button>
         {% endif %}
+        </span>
       </td>
     </tr>
   {% else %}<tr><td colspan="6" class="text-muted">No history.</td></tr>{% endfor %}

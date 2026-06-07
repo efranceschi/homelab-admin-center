@@ -3,14 +3,15 @@
 {% block nav_active %}groups{% endblock %}
 {% block autorefresh %}1{% endblock %}
 {% block title %}Groups · {{ app_name }}{% endblock %}
+{% block page_icon %}box{% endblock %}
+{% block page_title %}Groups{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div class="page-head"><span class="ph-icon">{{ icon('box', 20) }}</span><h4>Groups</h4></div>
-  {% if current_role == 'admin' %}
-  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-group-modal">
-    <span class="btn-ico">{{ icon('plus', 14) }}</span> Add group</button>
-  {% endif %}
+{% if current_role == 'admin' %}
+<div class="d-flex justify-content-end mb-3">
+  <button class="act-btn act-btn-primary" data-bs-toggle="modal" data-bs-target="#add-group-modal"
+          title="Add group" aria-label="Add group">{{ icon('plus', 16) }}</button>
 </div>
+{% endif %}
 <p class="text-muted">A group can contain hosts and other groups (nested). Groups
   can be used as run targets and to scope plugin configuration.</p>
 
@@ -30,13 +31,16 @@
         <td class="cell-num">{{ it.subgroups }}</td>
         <td class="cell-num">{{ it.effective }}</td>
         <td class="text-end text-nowrap">
-          <a href="/groups/{{ it.g.id }}" class="btn btn-sm btn-outline-primary" title="Edit group">{{ icon('settings', 14) }}</a>
+          <span class="act-group">
+          <a href="/groups/{{ it.g.id }}" class="act-btn act-btn-secondary" title="Edit group" aria-label="Edit group {{ it.g.name }}">{{ icon('settings', 16) }}</a>
           {% if current_role == 'admin' %}
-          <button type="button" class="btn btn-sm btn-outline-danger" title="Delete group"
+          <button type="button" class="act-btn act-btn-danger"
                   data-action="/groups/{{ it.g.id }}/delete"
                   data-title="Delete group" data-ok="Delete"
-                  data-confirm="Delete group “{{ it.g.name }}”? Membership edges are removed; hosts and subgroups are not deleted.">{{ icon('trash', 14) }}</button>
+                  data-confirm="Delete group “{{ it.g.name }}”? Membership edges are removed; hosts and subgroups are not deleted."
+                  title="Delete group" aria-label="Delete group {{ it.g.name }}">{{ icon('trash', 16) }}</button>
           {% endif %}
+          </span>
         </td>
       </tr>
     {% else %}
