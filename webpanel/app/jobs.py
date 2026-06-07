@@ -51,7 +51,9 @@ class JobRuntime:
         self.subscribers.discard(q)
 
 
-DEFAULT_MAX_CONCURRENT = 1
+# Per-host fan-out turns a "Check All" into N jobs; run several at once so the
+# burst doesn't serialize (still capped, and never overlaps a scheduler run).
+DEFAULT_MAX_CONCURRENT = 5
 MAX_MAX_CONCURRENT = 10
 _RETRY_SECONDS = 5  # re-check the flock this often while runs are queued
 
@@ -273,6 +275,11 @@ class JobManager:
                 if state is None:
                     state = HostState(server_id=sid)
                     db.add(state)
+                # Only the most recent run wins: never let an older job (a
+                # straggler that finished after a newer one) clobber a fresher
+                # per-host state.
+                if state.last_job_id is not None and rt.job_id < state.last_job_id:
+                    continue
                 state.last_job_id = rt.job_id
                 new_status = results.status_from_stats(stats)
                 if new_status is not None:

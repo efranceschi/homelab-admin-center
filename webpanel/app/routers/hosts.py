@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import crypto, proxmox
-from ..ansible_layer.service import JobBusyError, start_job
+from ..ansible_layer.service import JobBusyError, start_jobs
 from ..auth import current_user, require_admin, verify_csrf
 from ..db import db_dependency
 from ..jobs import manager
@@ -141,7 +141,7 @@ async def check_all_hosts(
     if not server_ids or not plugin_ids:
         return RedirectResponse("/hosts", status_code=303)
     try:
-        await start_job(
+        await start_jobs(
             db, user_id=user.id, server_ids=server_ids, plugin_ids=plugin_ids, mode="check"
         )
     except (JobBusyError, ValueError) as exc:
@@ -172,7 +172,7 @@ async def apply_all_hosts(
     if not server_ids or not plugin_ids:
         return RedirectResponse("/hosts", status_code=303)
     try:
-        await start_job(
+        await start_jobs(
             db, user_id=user.id, server_ids=server_ids, plugin_ids=plugin_ids, mode="apply"
         )
     except (JobBusyError, ValueError) as exc:
@@ -194,7 +194,7 @@ async def check_host(
     if srv is None or not plugin_ids:
         return RedirectResponse("/hosts", status_code=303)
     try:
-        await start_job(
+        await start_jobs(
             db, user_id=user.id, server_ids=[server_id], plugin_ids=plugin_ids, mode="check"
         )
     except (JobBusyError, ValueError) as exc:
@@ -219,7 +219,7 @@ async def apply_host(
     if srv is None or not plugin_ids:
         return RedirectResponse("/hosts", status_code=303)
     try:
-        await start_job(
+        await start_jobs(
             db, user_id=user.id, server_ids=[server_id], plugin_ids=plugin_ids, mode="apply"
         )
     except (JobBusyError, ValueError) as exc:

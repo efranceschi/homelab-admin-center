@@ -122,10 +122,13 @@ def _tick() -> None:
                 plugins = _resolve_plugins(db, sched)
                 print(f"[scheduler] firing '{sched.name}' ({sched.mode})", flush=True)
                 if targets and plugins:
-                    headless.run_now(
-                        db, server_ids=targets, plugin_ids=plugins,
-                        mode=sched.mode, triggered_by=sched.created_by,
-                    )
+                    # One job per host: keeps each host's config_state tied to its
+                    # own run, consistent with panel-triggered fan-out.
+                    for sid in targets:
+                        headless.run_now(
+                            db, server_ids=[sid], plugin_ids=plugins,
+                            mode=sched.mode, triggered_by=sched.created_by,
+                        )
                 sched.last_run_at = now
                 sched.next_run_at = compute_next_run(sched, datetime.now(timezone.utc))
 

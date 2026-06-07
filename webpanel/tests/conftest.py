@@ -122,14 +122,18 @@ def admin_client(client, csrf):
 
 @pytest.fixture
 def no_real_jobs(monkeypatch):
-    """Stub ``start_job`` in the routers so check/apply never launch ansible.
+    """Stub ``start_jobs`` in the routers so check/apply never launch ansible.
 
-    The endpoints only use the return value's truthiness, so an async no-op that
-    records its calls is enough to exercise the routing/auth/audit paths.
+    The endpoints only use the returned list's length / ``.id``, so an async
+    no-op that records its calls and returns one fake per host is enough to
+    exercise the routing/auth/audit paths.
     """
     calls: list[dict] = []
 
-    async def _fake_start_job(db, *, user_id, server_ids, plugin_ids, mode, group_ids=None):
+    class _FakeJob:
+        id = 1
+
+    async def _fake_start_jobs(db, *, user_id, server_ids, plugin_ids, mode, group_ids=None):
         calls.append(
             {
                 "user_id": user_id,
@@ -139,13 +143,14 @@ def no_real_jobs(monkeypatch):
                 "group_ids": group_ids,
             }
         )
-        return object()  # truthy sentinel; routers don't inspect it
+        # One fake job per resolved host (mirrors the real fan-out shape).
+        return [_FakeJob() for _ in (server_ids or [None])]
 
     import app.routers.hosts as hosts_router
     import app.routers.jobs as jobs_router
 
-    monkeypatch.setattr(hosts_router, "start_job", _fake_start_job)
-    monkeypatch.setattr(jobs_router, "start_job", _fake_start_job)
+    monkeypatch.setattr(hosts_router, "start_jobs", _fake_start_jobs)
+    monkeypatch.setattr(jobs_router, "start_jobs", _fake_start_jobs)
     return calls
 
 

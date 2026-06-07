@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..ansi import ansi_to_html
-from ..ansible_layer.service import JobBusyError, recover_selection, start_job
+from ..ansible_layer.service import JobBusyError, recover_selection, start_jobs
 from ..auth import current_user, require_admin, verify_csrf
 from ..db import db_dependency
 from ..jobs import manager
@@ -77,7 +77,7 @@ async def run_job(
         return RedirectResponse("/jobs", status_code=303)
 
     try:
-        await start_job(
+        await start_jobs(
             db,
             user_id=user.id,
             server_ids=server_ids,
@@ -89,7 +89,7 @@ async def run_job(
         return render(request, "error.html", message=str(exc))
     except ValueError as exc:
         return render(request, "error.html", message=str(exc))
-    # Stay on the Run page; the new job shows in history (status links to it).
+    # Stay on the Run page; the new per-host jobs show in history (status links).
     return RedirectResponse("/jobs", status_code=303)
 
 
@@ -202,7 +202,7 @@ async def retry_job(
         )
 
     try:
-        new_job = await start_job(
+        new_jobs = await start_jobs(
             db,
             user_id=user.id,
             server_ids=server_ids,
@@ -212,7 +212,9 @@ async def retry_job(
         )
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))
-    return RedirectResponse(f"/jobs/{new_job.id}", status_code=303)
+    if len(new_jobs) == 1:
+        return RedirectResponse(f"/jobs/{new_jobs[0].id}", status_code=303)
+    return RedirectResponse("/jobs", status_code=303)
 
 
 @router.post("/{job_id}/apply", dependencies=[Depends(verify_csrf)])
@@ -249,7 +251,7 @@ async def apply_from_job(
         )
 
     try:
-        new_job = await start_job(
+        new_jobs = await start_jobs(
             db,
             user_id=user.id,
             server_ids=server_ids,
@@ -259,7 +261,9 @@ async def apply_from_job(
         )
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))
-    return RedirectResponse(f"/jobs/{new_job.id}", status_code=303)
+    if len(new_jobs) == 1:
+        return RedirectResponse(f"/jobs/{new_jobs[0].id}", status_code=303)
+    return RedirectResponse("/jobs", status_code=303)
 
 
 @router.post("/{job_id}/cancel", dependencies=[Depends(verify_csrf)])

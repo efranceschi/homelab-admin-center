@@ -12,7 +12,7 @@ from ..models import Job, Server
 from ..plugins import registry
 from . import inventory_builder, runner, vars_builder
 
-__all__ = ["start_job", "JobBusyError", "recover_selection"]
+__all__ = ["start_job", "start_jobs", "JobBusyError", "recover_selection"]
 
 
 def recover_selection(db: Session, job: Job) -> tuple[list[int], list[str], list[int]]:
@@ -123,3 +123,40 @@ async def start_job(
     db.commit()  # persist the job row before the async task touches it
     manager.submit(job_id, cmd, env, run_dir, [s.id for s in servers])
     return job
+
+
+async def start_jobs(
+    db: Session,
+    *,
+    user_id: int | None,
+    server_ids: list[int],
+    plugin_ids: list[str],
+    mode: str,
+    group_ids: list[int] | None = None,
+) -> list[Job]:
+    """Fan out a multi-host trigger to ONE job per host.
+
+    Resolves the direct ``server_ids`` plus the recursively-expanded
+    ``group_ids`` into a deduplicated host set, then starts a single-host
+    :func:`start_job` for each. This keeps every host's ``config_state`` tied to
+    its own job (no shared ``last_job_id`` across hosts), so the live status and
+    drift state stay individual and consistent. Returns the created jobs.
+    """
+    from ..groups import expand_group_hosts
+
+    target_ids = set(server_ids or []) | expand_group_hosts(db, group_ids or [])
+    if not target_ids:
+        raise ValueError("no valid target servers selected")
+    jobs: list[Job] = []
+    for sid in sorted(target_ids):
+        jobs.append(
+            await start_job(
+                db,
+                user_id=user_id,
+                server_ids=[sid],
+                plugin_ids=plugin_ids,
+                mode=mode,
+                group_ids=[],
+            )
+        )
+    return jobs

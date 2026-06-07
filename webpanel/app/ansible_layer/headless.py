@@ -127,6 +127,10 @@ def run_now(
         if state is None:
             state = HostState(server_id=srv.id)
             db.add(state)
+        # Only the most recent run wins: never let an older job (a straggler that
+        # finished after a newer one) clobber a fresher per-host state.
+        if state.last_job_id is not None and job_id < state.last_job_id:
+            continue
         state.last_job_id = job_id
         stats = recap.get(srv.name)
         st = results.status_from_stats(stats)
