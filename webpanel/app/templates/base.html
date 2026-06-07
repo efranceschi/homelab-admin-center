@@ -92,18 +92,18 @@
       <div class="sidebar-foot-actions">
         {{ theme_toggle() }}
         <button type="button" class="icon-btn" onclick="location.reload()" title="Refresh page">{{ icon('refresh') }}</button>
-        <form method="post" action="/logout" class="ms-auto m-0">
+        {# Live job-pool readout — filled and kept fresh by the poller below. #}
+        <a href="/jobs" class="queue-indicator is-idle ms-auto" id="queue-indicator"
+           title="Job activity — running / max concurrent">
+          <span class="qi-ico">{{ icon('activity', 13) }}</span>
+          <span class="qi-conc"><b id="qi-running">0</b>/<span id="qi-max">1</span></span>
+          <span class="qi-queued" id="qi-queued" hidden>· <b id="qi-queued-n">0</b></span>
+        </a>
+        <form method="post" action="/logout" class="m-0">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="icon-btn" type="submit" title="Logout">{{ icon('log-out') }}</button>
         </form>
       </div>
-      {# Live job-pool readout — filled and kept fresh by the poller below. #}
-      <a href="/jobs" class="queue-indicator is-idle" id="queue-indicator"
-         title="Job activity — running / max concurrent">
-        <span class="qi-ico">{{ icon('activity', 13) }}</span>
-        <span class="qi-conc"><b id="qi-running">0</b>/<span id="qi-max">1</span></span>
-        <span class="qi-queued" id="qi-queued" hidden>· <b id="qi-queued-n">0</b> queued</span>
-      </a>
     </div>
   </aside>
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>

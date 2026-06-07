@@ -256,15 +256,18 @@ hr { border-color: var(--border-subtle); opacity: 1; }
   font-family: var(--fonts-mono); font-size: .8rem; color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.sidebar-foot-actions { display: flex; gap: .4rem; }
+.sidebar-foot-actions { display: flex; align-items: center; gap: .4rem; }
+.sidebar-foot-actions .icon-btn { flex: 0 0 auto; }
 
 /* Always-on job activity readout (running / max concurrent + queued). Amber
-   when something is active, muted when idle. Pinned to the bottom-right of the
-   sidebar footer; clicking jumps to /jobs. */
+   when something is active, muted when idle. Sits inline in the footer action
+   row between refresh and logout; clicking jumps to /jobs. The full
+   "N/M running · K queued" phrasing lives in the title tooltip. */
 .queue-indicator {
-  display: flex; align-items: center; justify-content: flex-end; gap: .35rem;
-  font-family: var(--fonts-mono); font-size: .72rem;
-  color: var(--text-secondary); text-decoration: none; padding: .15rem 0;
+  display: flex; align-items: center; gap: .25rem;
+  flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap;
+  font-family: var(--fonts-mono); font-size: .7rem;
+  color: var(--text-secondary); text-decoration: none;
 }
 .queue-indicator .qi-ico { color: var(--accent-primary); display: inline-flex; }
 .queue-indicator.is-idle { color: var(--text-muted); }
