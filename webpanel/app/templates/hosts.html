@@ -27,6 +27,12 @@
                 data-action="/hosts/check-all"
                 data-title="Check all hosts" data-ok="Run check" data-ok-class="btn-primary"
                 data-confirm="Run a configuration drift check (--check) against all enabled hosts? This starts one job."><span class="btn-ico">{{ icon('search', 14) }}</span> Check all</button>
+        {% if current_role == 'admin' and ood_count %}
+        <button type="button" class="btn btn-sm btn-warning"
+                data-action="/hosts/apply-all"
+                data-title="Apply all out-of-date hosts" data-ok="Apply all" data-ok-class="btn-warning"
+                data-confirm="Apply configuration to the {{ ood_count }} host(s) flagged out of date by the last check? This starts one apply job."><span class="btn-ico">{{ icon('play', 14) }}</span> Apply all ({{ ood_count }})</button>
+        {% endif %}
         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add-host-modal"><span class="btn-ico">{{ icon('plus', 14) }}</span> Add host</button>
       </div>
     </div>

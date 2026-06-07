@@ -68,6 +68,13 @@ def list_hosts(
         s.proxmox_vmid for s in servers if s.connection_type == "proxmox" and s.proxmox_vmid
     }
     available = [c for c in proxmox.list_containers() if c["vmid"] not in registered]
+    ood_count = sum(
+        1
+        for s in servers
+        if s.enabled
+        and states.get(s.id)
+        and states[s.id].config_status == "out_of_date"
+    )
     return render(
         request,
         "hosts.html",
@@ -77,6 +84,7 @@ def list_hosts(
         live_status=_live_host_status(db),
         pct_containers=available,
         pct_available=proxmox.pct_path() is not None,
+        ood_count=ood_count,
     )
 
 
@@ -126,6 +134,37 @@ async def check_all_hosts(
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))
     db.add(AuditLog(user_id=user.id, action="host.check_all", target="all"))
+    return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+
+@router.post("/apply-all", dependencies=[Depends(verify_csrf)])
+async def apply_all_hosts(
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(current_user),
+):
+    """Apply configuration to every enabled host the last check flagged as out
+    of date, converging the whole fleet in a single apply job."""
+    # Viewer may run check mode; only admin may apply (matches the run endpoint).
+    if user.role != "admin":
+        return render(request, "error.html", message="Only admins can apply changes.")
+    rows = db.scalars(
+        select(Server)
+        .join(HostState, HostState.server_id == Server.id)
+        .where(Server.enabled.is_(True), HostState.config_status == "out_of_date")
+        .order_by(Server.name)
+    ).all()
+    server_ids = [s.id for s in rows]
+    plugin_ids = _all_enabled_plugin_keys(db)
+    if not server_ids or not plugin_ids:
+        return RedirectResponse("/hosts", status_code=303)
+    try:
+        job = await start_job(
+            db, user_id=user.id, server_ids=server_ids, plugin_ids=plugin_ids, mode="apply"
+        )
+    except (JobBusyError, ValueError) as exc:
+        return render(request, "error.html", message=str(exc))
+    db.add(AuditLog(user_id=user.id, action="host.apply_all", target="out_of_date"))
     return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
 

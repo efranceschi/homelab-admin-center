@@ -38,10 +38,18 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div class="page-head"><span class="ph-icon">{{ icon('grid', 20) }}</span><h4>Dashboard</h4></div>
-  <form method="post" action="/hosts/check-all" class="m-0">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="btn btn-sm btn-outline-primary"><span class="btn-ico">{{ icon('refresh', 14) }}</span> Check all hosts</button>
-  </form>
+  <div class="d-flex gap-2">
+    <form method="post" action="/hosts/check-all" class="m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-sm btn-outline-primary"><span class="btn-ico">{{ icon('search', 14) }}</span> Check all</button>
+    </form>
+    {% if current_role == 'admin' and counts.out_of_date %}
+    <button type="button" class="btn btn-sm btn-warning"
+            data-action="/hosts/apply-all"
+            data-title="Apply all out-of-date hosts" data-ok="Apply all" data-ok-class="btn-warning"
+            data-confirm="Apply configuration to the {{ counts.out_of_date }} host(s) flagged out of date by the last check? This starts one apply job."><span class="btn-ico">{{ icon('play', 14) }}</span> Apply all ({{ counts.out_of_date }})</button>
+    {% endif %}
+  </div>
 </div>
 
 {# ---- KPI strip ---------------------------------------------------------- #}
