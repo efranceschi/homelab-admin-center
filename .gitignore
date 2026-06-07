@@ -1,4 +1,4 @@
-# Runtime efêmero / artefatos — não versionar.
+# Ephemeral runtime / artifacts — do not version.
 .venv/
 collections/
 __pycache__/
@@ -6,8 +6,8 @@ __pycache__/
 *.retry
 *.log
 
-# Segredos do host (a senha do vault NUNCA entra no git).
-# O vault.yml em si É versionável (está criptografado).
+# Host secrets (the vault password NEVER goes into git).
+# vault.yml itself IS versionable (it is encrypted).
 vault-pass
 .vault-pass
 

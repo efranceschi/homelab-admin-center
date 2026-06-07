@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Inventário dinâmico Ansible para containers LXC do Proxmox (caminho PRIMÁRIO).
+"""Ansible dynamic inventory for Proxmox LXC containers (PRIMARY path).
 
-Enumera os containers via `pct list`, filtra os que estão `running` e emite um
-inventário JSON onde cada host usa o connection plugin `pct` (pct exec/push/pull).
-Não requer token/API — roda localmente como root no nó Proxmox.
+Enumerates containers via `pct list`, filters the `running` ones and emits a
+JSON inventory where each host uses the `pct` connection plugin (pct
+exec/push/pull). Requires no token/API — runs locally as root on the Proxmox node.
 
-Cada host recebe:
+Each host receives:
   ansible_connection = pct
-  ansible_host       = <VMID>     (usado pelo connection plugin como alvo do pct)
+  ansible_host       = <VMID>     (used by the connection plugin as the pct target)
   pct_vmid           = <VMID>
-  pct_name           = <hostname do container>
+  pct_name           = <container hostname>
   pct_ostype         = ubuntu|debian|...
 
-Grupos:
-  running            : todos os containers ligados
-  ostype_<tipo>      : agrupados por ostype (ostype_ubuntu, ostype_debian, ...)
+Groups:
+  running            : all powered-on containers
+  ostype_<type>      : grouped by ostype (ostype_ubuntu, ostype_debian, ...)
 
-Uso:
+Usage:
   ./pct.py --list
-  ./pct.py --host <name>   (retorna {} — todas as vars já vêm no --list)
+  ./pct.py --host <name>   (returns {} — all vars already come from --list)
 """
 import json
 import subprocess
@@ -32,26 +32,26 @@ def run(cmd):
 
 
 def list_containers():
-    """Retorna lista de dicts {vmid, status, name} a partir de `pct list`."""
+    """Return a list of dicts {vmid, status, name} from `pct list`."""
     out = run(["pct", "list"])
     lines = out.splitlines()
     if not lines:
         return []
-    # Cabeçalho: VMID  Status  Lock  Name  -> parsing por colunas via split simples.
+    # Header: VMID  Status  Lock  Name  -> column parsing via simple split.
     containers = []
     for line in lines[1:]:
         parts = line.split()
         if len(parts) < 2:
             continue
         vmid, status = parts[0], parts[1]
-        # Name é a última coluna; Lock é opcional no meio.
+        # Name is the last column; Lock is optional in the middle.
         name = parts[-1] if len(parts) >= 3 else vmid
         containers.append({"vmid": vmid, "status": status, "name": name})
     return containers
 
 
 def ostype_of(vmid):
-    """Lê o ostype do container via `pct config`. Default 'debian' se ausente."""
+    """Read the container ostype via `pct config`. Defaults to 'debian' if absent."""
     try:
         out = run(["pct", "config", vmid])
     except subprocess.CalledProcessError:
@@ -94,10 +94,10 @@ def main():
     if arg == "--list":
         print(json.dumps(build_inventory(), indent=2))
     elif arg == "--host":
-        # Todas as vars vêm via _meta no --list.
+        # All vars come via _meta in --list.
         print(json.dumps({}))
     else:
-        sys.stderr.write("uso: pct.py --list | --host <name>\n")
+        sys.stderr.write("usage: pct.py --list | --host <name>\n")
         sys.exit(1)
 
 

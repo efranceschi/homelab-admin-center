@@ -1,8 +1,8 @@
 ---
-# Define o timezone de forma idempotente. Em LXC unprivileged o timedatectl
-# costuma falhar (sem acesso ao RTC/clock do host), então usamos o método de
-# arquivos como fonte da verdade e ajustamos a tzdata.
-- name: Instalar tzdata
+# Set the timezone idempotently. On unprivileged LXC, timedatectl usually fails
+# (no access to the host RTC/clock), so we use the file-based method as the
+# source of truth and adjust tzdata.
+- name: Install tzdata
   ansible.builtin.apt:
     name: tzdata
     state: present
@@ -11,24 +11,24 @@
   register: tzdata_install
   failed_when: false
 
-- name: Definir /etc/timezone
+- name: Set /etc/timezone
   ansible.builtin.copy:
     content: "{{ common_timezone }}\n"
     dest: /etc/timezone
     owner: root
     group: root
     mode: "0644"
-  notify: reconfigurar tzdata
+  notify: reconfigure tzdata
 
-- name: Apontar /etc/localtime para a zona correta
+- name: Point /etc/localtime to the correct zone
   ansible.builtin.file:
     src: "/usr/share/zoneinfo/{{ common_timezone }}"
     dest: /etc/localtime
     state: link
     force: true
-  notify: reconfigurar tzdata
+  notify: reconfigure tzdata
 
-- name: Tentar aplicar via timedatectl (no-op em unprivileged)
+- name: Try to apply via timedatectl (no-op on unprivileged)
   ansible.builtin.command:
     cmd: "timedatectl set-timezone {{ common_timezone }}"
   changed_when: false

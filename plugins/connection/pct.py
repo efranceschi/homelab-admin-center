@@ -1,6 +1,6 @@
-# Connection plugin: executa tasks Ansible dentro de containers LXC do Proxmox
-# usando `pct exec` / `pct push` / `pct pull`. Roda como root no nó Proxmox,
-# dispensa SSH e funciona em containers privilegiados e unprivileged.
+# Connection plugin: runs Ansible tasks inside Proxmox LXC containers using
+# `pct exec` / `pct push` / `pct pull`. Runs as root on the Proxmox node, needs
+# no SSH and works on both privileged and unprivileged containers.
 from __future__ import annotations
 
 import os
@@ -13,21 +13,21 @@ from ansible.utils.display import Display
 
 DOCUMENTATION = """
     name: pct
-    short_description: Executa via `pct exec` em containers LXC do Proxmox
+    short_description: Runs via `pct exec` in Proxmox LXC containers
     description:
-        - Usa o utilitário `pct` do Proxmox para executar comandos e transferir
-          arquivos para dentro de containers LXC, sem necessidade de SSH.
+        - Uses the Proxmox `pct` utility to run commands and transfer files
+          into LXC containers, with no SSH required.
     author: lxc-ansible
     options:
       remote_addr:
-        description: VMID do container (vem de ansible_host no inventário pct.py).
+        description: Container VMID (comes from ansible_host in the pct.py inventory).
         default: inventory_hostname
         vars:
           - name: inventory_hostname
           - name: ansible_host
           - name: pct_vmid
       executable:
-        description: Shell usado para executar os comandos dentro do container.
+        description: Shell used to run the commands inside the container.
         default: /bin/sh
         vars:
           - name: ansible_executable
@@ -35,7 +35,7 @@ DOCUMENTATION = """
           - section: defaults
             key: executable
       pct_cmd:
-        description: Caminho do binário pct no host.
+        description: Path to the pct binary on the host.
         default: pct
         vars:
           - name: pct_cmd
@@ -85,7 +85,7 @@ class Connection(ConnectionBase):
         display.vvv("PUT {0} TO {1}".format(in_path, out_path), host=self._vmid)
         if not os.path.exists(to_bytes(in_path, errors="surrogate_or_strict")):
             raise AnsibleFileNotFound(
-                "arquivo de origem não encontrado: {0}".format(in_path)
+                "source file not found: {0}".format(in_path)
             )
         cmd = [self._pct(), "push", self._vmid, in_path, out_path]
         self._run_transfer(cmd, "push")
@@ -103,7 +103,7 @@ class Connection(ConnectionBase):
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
             raise AnsibleError(
-                "pct {0} falhou (rc={1}): {2}".format(
+                "pct {0} failed (rc={1}): {2}".format(
                     action, proc.returncode, to_native(stderr)
                 )
             )

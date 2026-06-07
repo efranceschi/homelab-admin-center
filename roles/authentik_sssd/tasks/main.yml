@@ -1,7 +1,7 @@
 ---
-# Integra autenticação com o LDAP outpost do Authentik via SSSD, mantendo
-# fallback automático para usuários locais (nsswitch: files ... sss).
-- name: Instalar pacotes SSSD/LDAP
+# Integrate authentication with Authentik's LDAP outpost via SSSD, keeping an
+# automatic fallback to local users (nsswitch: files ... sss).
+- name: Install SSSD/LDAP packages
   ansible.builtin.apt:
     name:
       - sssd
@@ -12,7 +12,7 @@
     update_cache: true
     cache_valid_time: 3600
 
-- name: Resolver o hostname do outpost LDAP via /etc/hosts (p/ TLS por nome)
+- name: Resolve the LDAP outpost hostname via /etc/hosts (for TLS by name)
   ansible.builtin.lineinfile:
     path: /etc/hosts
     line: "{{ authentik_ldap_hosts_entry }}"
@@ -22,7 +22,7 @@
     - authentik_ldap_hosts_entry is defined
     - authentik_ldap_hosts_entry | length > 0
 
-- name: Instalar certificado CA do outpost (quando fornecido)
+- name: Install the outpost CA certificate (when provided)
   ansible.builtin.copy:
     content: "{{ authentik_ldap_ca_cert }}"
     dest: /etc/sssd/authentik-ca.crt
@@ -32,41 +32,41 @@
   when:
     - authentik_ldap_ca_cert is defined
     - authentik_ldap_ca_cert | length > 0
-  notify: reiniciar sssd
+  notify: restart sssd
 
-- name: Gerar /etc/sssd/sssd.conf
+- name: Generate /etc/sssd/sssd.conf
   ansible.builtin.template:
     src: sssd.conf.j2
     dest: /etc/sssd/sssd.conf
     owner: root
     group: root
-    mode: "0600" # SSSD recusa iniciar se for mais permissivo
-  notify: reiniciar sssd
+    mode: "0600" # SSSD refuses to start if it is more permissive
+  notify: restart sssd
 
-# --- NSS: garante fallback local (files vem ANTES de sss) ---
+# --- NSS: ensure local fallback (files comes BEFORE sss) ---
 - name: "nsswitch: passwd -> files systemd sss"
   ansible.builtin.lineinfile:
     path: /etc/nsswitch.conf
     regexp: '^passwd:'
     line: "passwd:         files systemd sss"
-  notify: reiniciar sssd
+  notify: restart sssd
 
 - name: "nsswitch: group -> files systemd sss"
   ansible.builtin.lineinfile:
     path: /etc/nsswitch.conf
     regexp: '^group:'
     line: "group:          files systemd sss"
-  notify: reiniciar sssd
+  notify: restart sssd
 
 - name: "nsswitch: shadow -> files sss"
   ansible.builtin.lineinfile:
     path: /etc/nsswitch.conf
     regexp: '^shadow:'
     line: "shadow:         files sss"
-  notify: reiniciar sssd
+  notify: restart sssd
 
-# --- PAM: habilita sss e criação de home, preservando pam_unix (fallback) ---
-- name: Instalar perfil pam-config para mkhomedir
+# --- PAM: enable sss and home creation, preserving pam_unix (fallback) ---
+- name: Install pam-config profile for mkhomedir
   ansible.builtin.copy:
     src: mkhomedir
     dest: /usr/share/pam-configs/mkhomedir
@@ -75,7 +75,7 @@
     mode: "0644"
   register: mkhomedir_profile
 
-- name: Habilitar perfis PAM sss e mkhomedir
+- name: Enable sss and mkhomedir PAM profiles
   ansible.builtin.command:
     cmd: pam-auth-update --package --enable sss --enable mkhomedir
   register: pam_update

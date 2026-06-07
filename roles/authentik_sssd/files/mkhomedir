@@ -1,4 +1,4 @@
-Name: Criar diretório home no primeiro login
+Name: Create home directory on first login
 Default: yes
 Priority: 0
 Session-Type: Additional

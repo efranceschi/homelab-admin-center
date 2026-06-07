@@ -1,13 +1,13 @@
 ---
-# Notificados via `listen` para garantir ordem: valida ANTES de reiniciar.
-- name: Validar configuração do sshd
+# Notified via `listen` to guarantee order: validate BEFORE restarting.
+- name: Validate sshd configuration
   ansible.builtin.command:
     cmd: sshd -t
   changed_when: false
-  listen: ssh config alterada
+  listen: ssh config changed
 
-- name: Reiniciar serviço ssh
+- name: Restart ssh service
   ansible.builtin.service:
     name: ssh
     state: restarted
-  listen: ssh config alterada
+  listen: ssh config changed

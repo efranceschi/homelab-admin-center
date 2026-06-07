@@ -1,11 +1,11 @@
 ---
-# Playbook mestre: padroniza todos os containers LXC rodando.
-# Executado por run.sh (diário via cron.d). Idempotente.
-- name: Padronização dos containers LXC
+# Master playbook: standardizes every running LXC container.
+# Run by run.sh (daily via cron.d). Idempotent.
+- name: Standardize LXC containers
   hosts: running
   gather_facts: true
-  become: false # pct exec já entra como root no container
-  serial: "50%" # processa em duas levas para limitar impacto simultâneo
+  become: false # pct exec already enters as root in the container
+  serial: "50%" # process in two waves to limit simultaneous impact
 
   roles:
     - role: common_timezone
@@ -19,15 +19,18 @@
       tags: [apt, updates]
 
   post_tasks:
-    - name: Detectar necessidade de reboot
+    - name: Detect reboot requirement
       ansible.builtin.stat:
         path: /var/run/reboot-required
       register: reboot_required_file
 
-    - name: Resumo — reboot necessário?
+    # The panel parses this line: it must start with "<host>:" and contain
+    # "REBOOT REQUIRED" for parse_reboot() to flag the host.
+    - name: Summary — reboot required?
       ansible.builtin.debug:
         msg: >-
-          {{ inventory_hostname }} ({{ pct_ostype | default('?') }}):
-          {{ 'REBOOT NECESSÁRIO (não reiniciado por política)'
+          {{ inventory_hostname }}:
+          {{ 'REBOOT REQUIRED (not rebooted by policy)'
              if reboot_required_file.stat.exists
-             else 'sem reboot pendente' }}
+             else 'no reboot pending' }}
+          ({{ pct_ostype | default('?') }})

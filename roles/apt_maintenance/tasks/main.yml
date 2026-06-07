@@ -1,11 +1,11 @@
 ---
-# Atualização de pacotes Debian/Ubuntu. Política: full-upgrade, SEM reboot.
-- name: Atualizar índice de pacotes
+# Debian/Ubuntu package updates. Policy: full-upgrade, NO reboot.
+- name: Update package index
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 0
 
-- name: Aplicar full-upgrade (dist-upgrade)
+- name: Apply full-upgrade (dist-upgrade)
   ansible.builtin.apt:
     upgrade: dist
   environment:
@@ -13,13 +13,13 @@
   register: apt_upgrade_result
   when: apt_full_upgrade | bool
 
-- name: Remover pacotes órfãos (autoremove)
+- name: Remove orphaned packages (autoremove)
   ansible.builtin.apt:
     autoremove: true
     purge: true
   when: apt_autoremove | bool
 
-- name: Limpar cache (autoclean)
+- name: Clean cache (autoclean)
   ansible.builtin.apt:
     autoclean: true
   when: apt_autoclean | bool

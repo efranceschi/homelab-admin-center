@@ -1,5 +1,5 @@
 ---
-- name: reiniciar sssd
+- name: restart sssd
   ansible.builtin.service:
     name: sssd
     state: restarted

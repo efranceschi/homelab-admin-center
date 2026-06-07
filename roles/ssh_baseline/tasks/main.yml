@@ -1,14 +1,14 @@
 ---
-# Padroniza o SSH via drop-in (não edita o sshd_config principal) e distribui
-# a chave pública do host para habilitar o caminho de conexão SSH futuro.
-- name: Instalar openssh-server
+# Standardize SSH via a drop-in (does not edit the main sshd_config) and
+# distribute the host public key to enable the future SSH connection path.
+- name: Install openssh-server
   ansible.builtin.apt:
     name: openssh-server
     state: present
     update_cache: true
     cache_valid_time: 3600
 
-- name: Garantir diretório de drop-ins do sshd
+- name: Ensure sshd drop-in directory exists
   ansible.builtin.file:
     path: /etc/ssh/sshd_config.d
     state: directory
@@ -16,17 +16,17 @@
     group: root
     mode: "0755"
 
-- name: Aplicar baseline de SSH (drop-in)
+- name: Apply SSH baseline (drop-in)
   ansible.builtin.template:
     src: 00-baseline.conf.j2
     dest: /etc/ssh/sshd_config.d/00-baseline.conf
     owner: root
     group: root
     mode: "0644"
-  notify: ssh config alterada
+  notify: ssh config changed
 
-# Aceita lista YAML (group_vars) ou texto multilinha (painel: 1 chave por linha).
-- name: Normalizar lista de chaves públicas do host
+# Accepts a YAML list (group_vars) or multi-line text (panel: one key per line).
+- name: Normalize the host public-key list
   ansible.builtin.set_fact:
     ssh_host_pubkeys_list: >-
       {{
@@ -36,7 +36,7 @@
         | map('trim') | reject('equalto', '') | list
       }}
 
-- name: Distribuir chaves públicas do host para root
+- name: Distribute host public keys to root
   ansible.posix.authorized_key:
     user: root
     key: "{{ item }}"
