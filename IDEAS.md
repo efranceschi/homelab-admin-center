@@ -3,6 +3,7 @@
 This document is the roadmap and the implementation contract for **web-panel
 plugins**. Part 1 specifies how a plugin is built and wired so future plugins
 stay consistent and safe. Part 2 is a prioritized backlog of candidate plugins.
+Part 3 tracks core (non-plugin) panel features on the roadmap.
 
 A "plugin" is a thin manifest + form that maps UI fields to the variables of an
 **idempotent Ansible role**. The panel runs roles over Proxmox LXC containers
@@ -269,3 +270,33 @@ LXC: ✅ fine in unprivileged · ⚠️ needs privileged/nesting or care.
 3. **unattended_upgrades** — continuous patching; natural pair of `apt_maintenance`.
 
 Each is idempotent, check-mode friendly, and works in unprivileged LXC.
+
+---
+
+## Part 3 — Panel core backlog (non-plugin)
+
+Roadmap items for the panel itself (not Ansible plugins).
+
+### API keys for programmatic access (future)
+
+**Motivation.** Automation currently has to authenticate like a browser:
+log in with username/password and carry a per-session CSRF token (see
+`webpanel/restart.sh`, which scrapes `/login` then posts to
+`/settings/system/restart`). That is brittle and couples scripts to the HTML/CSRF
+flow.
+
+**Idea.** Add issuable API keys (admin-managed, scoped, revocable) accepted via
+an `Authorization`/`X-API-Key` header, bypassing the session+CSRF dance for
+non-browser callers. Sketch:
+
+- Storage: hashed key (never stored plaintext), label, owner, scopes, created/
+  last-used/expiry; reuse the credential-encryption patterns already in
+  `webpanel/app/crypto.py`.
+- Auth: a dependency alongside `current_user`/`require_admin`
+  (`webpanel/app/auth.py`) that resolves a key to a principal and enforces
+  scope; exempt key-authenticated requests from `verify_csrf`.
+- Management UI under **Settings** (issue / revoke / list), audit-logged.
+- Then simplify `restart.sh` (and any future CLI/CI tooling) to a single
+  authenticated request with the key.
+
+Pri **P2** — quality-of-life + safer automation; no plugin work involved.
