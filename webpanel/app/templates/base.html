@@ -92,7 +92,16 @@
       <div class="sidebar-foot-actions">
         {{ theme_toggle() }}
         <button type="button" class="icon-btn" onclick="location.reload()" title="Refresh page">{{ icon('refresh') }}</button>
-        <form method="post" action="/logout" class="ms-auto m-0">
+        {# Live job-pool readout — centred in the leftover space between refresh
+           and logout. Filled and kept fresh by the poller below; the full
+           "N/M running · K queued" phrasing lives in the title tooltip. #}
+        <a href="/jobs" class="queue-indicator is-idle" id="queue-indicator"
+           title="Job activity — running / max concurrent">
+          <span class="qi-ico">{{ icon('activity', 13) }}</span>
+          <span class="qi-conc"><b id="qi-running">0</b>/<span id="qi-max">1</span></span>
+          <span class="qi-queued" id="qi-queued" hidden>· <b id="qi-queued-n">0</b></span>
+        </a>
+        <form method="post" action="/logout" class="m-0">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="icon-btn" type="submit" title="Logout">{{ icon('log-out') }}</button>
         </form>
@@ -110,14 +119,6 @@
         {% if page_icon %}<span class="tt-icon">{{ icon(page_icon, 18) }}</span>{% endif %}
         <h1 class="tt-text">{% block page_title %}{% endblock %}</h1>
       </div>
-      {# Live job-pool readout, centred in the bar's leftover space. Filled and
-         kept fresh by the poller below; clicking jumps to /jobs. #}
-      <a href="/jobs" class="queue-indicator is-idle" id="queue-indicator"
-         title="Job activity — running / max concurrent">
-        <span class="qi-ico">{{ icon('activity', 14) }}</span>
-        <span class="qi-conc"><b id="qi-running">0</b>/<span id="qi-max">1</span> running</span>
-        <span class="qi-queued" id="qi-queued" hidden>· <b id="qi-queued-n">0</b> queued</span>
-      </a>
       <div class="topbar-identity">
         <span class="ti-name">{{ instance_name or app_name }}</span>
         <span class="ti-host">{{ icon('server', 11) }} {{ hostname }}</span>
