@@ -112,11 +112,15 @@
           </td>
           <td>{{ s.credential.name if s.credential else '—' }}</td>
           <td>
-            <form method="post" action="/hosts/{{ s.id }}/toggle" class="d-inline">
+            {# Slide switch — toggles enabled on change (the endpoint flips it). #}
+            <form method="post" action="/hosts/{{ s.id }}/toggle" class="d-inline m-0">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button class="act-btn {{ 'act-btn-success' if s.enabled else '' }}"
-                      title="{{ 'Enabled — click to disable' if s.enabled else 'Disabled — click to enable' }}"
-                      aria-label="{{ 'Disable host' if s.enabled else 'Enable host' }}">{{ icon('power', 16) }}</button>
+              <div class="form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       {{ 'checked' if s.enabled }} onchange="this.form.submit()"
+                       title="{{ 'Enabled — switch off to disable' if s.enabled else 'Disabled — switch on to enable' }}"
+                       aria-label="{{ 'Disable host ' ~ s.name if s.enabled else 'Enable host ' ~ s.name }}">
+              </div>
             </form>
           </td>
           <td class="text-end text-nowrap">
