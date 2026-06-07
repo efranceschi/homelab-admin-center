@@ -1,0 +1,16 @@
+---
+# Default LDAP schema mapping for the Authentik LDAP outpost.
+#
+# These are stable schema attributes exposed by Authentik's LDAP provider, not
+# per-deployment settings, so they must always have a value. The web panel runs
+# playbooks with extra-vars only and never loads group_vars, so without these
+# defaults the sssd.conf template fails with AnsibleUndefinedVariable (see the
+# 'authentik_ldap_user_object_class is undefined' failure). group_vars and the
+# panel's extra-vars still override any of these.
+authentik_ldap_user_object_class: "user"
+authentik_ldap_group_object_class: "group"
+authentik_ldap_user_name_attr: "cn"
+authentik_ldap_user_uid_attr: "uidNumber"
+authentik_ldap_user_gid_attr: "gidNumber"
+authentik_ldap_user_home_attr: "homeDirectory"
+authentik_ldap_user_shell_attr: "loginShell"
