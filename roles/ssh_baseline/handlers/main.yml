@@ -11,3 +11,6 @@
     name: ssh
     state: restarted
   listen: ssh config changed
+  # Skip during --check: a dry run shouldn't restart services, and on a host
+  # where openssh-server would be newly installed the unit isn't there yet.
+  when: not ansible_check_mode

@@ -4,3 +4,7 @@
     name: sssd
     state: restarted
     enabled: true
+  # In --check the install task is only simulated, so the sssd unit does not yet
+  # exist and a restart would fail with "Could not find the requested service".
+  # Restarting is meaningless during a dry run anyway.
+  when: not ansible_check_mode
