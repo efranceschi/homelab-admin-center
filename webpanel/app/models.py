@@ -111,6 +111,10 @@ class Server(Base):
         cascade="all, delete-orphan",
         order_by="HostInventory.key",
     )
+    docker_containers: Mapped[list["DockerContainer"]] = relationship(
+        cascade="all, delete-orphan",
+        order_by="DockerContainer.name",
+    )
 
 
 class HostGroup(Base):
@@ -304,6 +308,38 @@ class HostInventory(Base):
     changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow  # last seen/refreshed
+    )
+
+
+class DockerContainer(Base):
+    """A Docker container running on a docker host, for display only.
+
+    Populated from the playbook's ``PANEL_DOCKER`` probe (``docker ps``) and
+    synced read-only: rows are upserted by ``container_id`` and pruned when the
+    container disappears. These are NOT Ansible-managed — no check/apply, no
+    credentials, no groups, no facts. They render as leaf children of the host
+    that runs Docker (see ``app/tree.py``), the docker analogue of a Proxmox
+    node's LXC/QEMU guests.
+    """
+
+    __tablename__ = "docker_containers"
+    __table_args__ = (UniqueConstraint("host_server_id", "container_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    host_server_id: Mapped[int] = mapped_column(
+        ForeignKey("servers.id", ondelete="CASCADE"), nullable=False
+    )
+    container_id: Mapped[str] = mapped_column(String(64), nullable=False)  # docker ID
+    name: Mapped[str] = mapped_column(String(128), default="")
+    image: Mapped[str] = mapped_column(String(255), default="")
+    state: Mapped[str] = mapped_column(String(32), default="")  # running | exited | …
+    status: Mapped[str] = mapped_column(String(128), default="")  # "Up 3 hours"
+    ports: Mapped[str] = mapped_column(Text, default="")  # textual summary
+    compose_project: Mapped[str | None] = mapped_column(String(128))
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 
 

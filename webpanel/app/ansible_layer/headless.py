@@ -50,15 +50,16 @@ def _reconcile_probed_hostnames(db: Session, servers, text: str) -> None:
     discovery.record_probe_hostnames(db, servers, results.parse_hostnames(text))
 
 
-def gather_hostnames(servers) -> dict[str, str]:
-    """Run a read-only facts-only pass and return ``{inventory_host: hostname}``.
+def run_facts_probe(servers) -> str:
+    """Run a read-only facts-only pass and return the raw stdout log text.
 
     Selects only the ``facts`` tag (roles are skipped) under ``--check``, sharing
-    the run flock so it never overlaps a real job. Returns ``{}`` if the lock is
-    held, ansible is unavailable, or nothing was gathered.
+    the run flock so it never overlaps a real job. Returns ``""`` if there are no
+    servers, the lock is held, or ansible is unavailable — the markers it carries
+    (``PANEL_HOSTNAME``/``PANEL_FACTS``/``PANEL_DOCKER``) are parsed by the caller.
     """
     if not servers:
-        return {}
+        return ""
     run_dir = config.RUN_DIRS / "facts-probe"
     run_dir.mkdir(parents=True, exist_ok=True)
     host_vars = {s.id: {} for s in servers}
@@ -74,11 +75,16 @@ def gather_hostnames(servers) -> dict[str, str]:
                     stdout=log, stderr=subprocess.STDOUT,
                 )
     except OSError:
-        return {}
+        return ""
     finally:
         for key in run_dir.glob("id_*"):
             key.unlink(missing_ok=True)
-    return results.parse_hostnames(log_path.read_text(errors="replace"))
+    return log_path.read_text(errors="replace")
+
+
+def gather_hostnames(servers) -> dict[str, str]:
+    """Run a read-only facts pass and return ``{inventory_host: hostname}``."""
+    return results.parse_hostnames(run_facts_probe(servers))
 
 
 def run_now(
@@ -160,9 +166,13 @@ def run_now(
     recap = results.parse_recap(text)
     reboot = results.parse_reboot(text)
     _reconcile_probed_hostnames(db, servers, text)
-    from .. import inventory
+    from .. import docker, inventory
 
     inventory.store_facts(db, servers, results.parse_facts(text))
+    docker.sync_containers(
+        db, servers, results.parse_docker(text),
+        results.parse_hostnames(text).keys(),
+    )
     finished = datetime.now(timezone.utc)
     norm_mode = "apply" if mode == "apply" else "check"
     job.status = "success" if rc == 0 else "failed"

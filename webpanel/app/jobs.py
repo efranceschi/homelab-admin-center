@@ -343,11 +343,15 @@ class JobManager:
             # Opportunistic hostname + inventory refresh: every run emits the
             # facts-probe markers (tagged `always`), so a finished job doubles as
             # a probe.
-            from . import discovery, inventory
+            from . import discovery, docker, inventory
 
             probed = [s for s in (db.get(Server, sid) for sid in server_ids) if s]
-            discovery.record_probe_hostnames(db, probed, results.parse_hostnames(text))
+            hostnames = results.parse_hostnames(text)
+            discovery.record_probe_hostnames(db, probed, hostnames)
             inventory.store_facts(db, probed, results.parse_facts(text))
+            docker.sync_containers(
+                db, probed, results.parse_docker(text), hostnames.keys()
+            )
 
     @staticmethod
     def _record_host_event(

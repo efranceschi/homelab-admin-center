@@ -75,6 +75,31 @@
         msg: "PANEL_FACTS {{ inventory_hostname }} :: {{ _panel_inv | to_json | b64encode }}"
       tags: [facts, always]
 
+    # Read-only Docker probe for the Hosts tree: list the host's containers so
+    # the panel can show them as display-only children (NOT Ansible-managed).
+    # `check_mode: false` is required — the inventory probe runs under --check,
+    # which skips shell/command tasks by default; this command is read-only so
+    # it is safe to force. A `__DOCKER_PRESENT__` sentinel distinguishes "docker
+    # absent" (no marker) from "docker present, zero containers" (empty payload).
+    - name: Probe docker containers (panel docker probe)
+      ansible.builtin.shell: |
+        command -v docker >/dev/null 2>&1 || exit 0
+        echo __DOCKER_PRESENT__
+        docker ps -a --no-trunc --format '{{ '{{json .}}' }}' 2>/dev/null || true
+      args:
+        executable: /bin/sh
+      register: _panel_docker
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      tags: [facts, always]
+
+    - name: Report docker containers (panel docker probe)
+      ansible.builtin.debug:
+        msg: "PANEL_DOCKER {{ inventory_hostname }} :: {{ _panel_docker.stdout | default('') | b64encode }}"
+      when: "'__DOCKER_PRESENT__' in (_panel_docker.stdout | default(''))"
+      tags: [facts, always]
+
     - name: Detect reboot requirement
       ansible.builtin.stat:
         path: /var/run/reboot-required

@@ -183,7 +183,8 @@ def run_inventory_probe() -> dict[str, int]:
     Reuses the ansible layer (a read-only ``--check`` facts pass under the run
     flock) so it never overlaps a real job. Returns ``{"probed", "renamed"}``.
     """
-    from .ansible_layer import headless
+    from . import docker
+    from .ansible_layer import headless, results
 
     stats = {"probed": 0, "renamed": 0}
     with session_scope() as db:
@@ -192,7 +193,8 @@ def run_inventory_probe() -> dict[str, int]:
         )
     if not servers:
         return stats
-    hostnames = headless.gather_hostnames(servers)
+    text = headless.run_facts_probe(servers)
+    hostnames = results.parse_hostnames(text)
     if not hostnames:
         return stats
     stats["probed"] = len(hostnames)
@@ -201,6 +203,9 @@ def run_inventory_probe() -> dict[str, int]:
             db.scalars(select(Server).where(Server.enabled.is_(True))).all()
         )
         stats["renamed"] = record_probe_hostnames(db, servers, hostnames)
+        docker.sync_containers(
+            db, servers, results.parse_docker(text), hostnames.keys()
+        )
     return stats
 
 

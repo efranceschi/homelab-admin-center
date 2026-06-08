@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .groups import effective_group_ids_for_host, expand_group_hosts
-from .models import HostGroup, Server
+from .models import DockerContainer, HostGroup, Server
 
 
 class _Ctx:
@@ -39,6 +39,12 @@ class _Ctx:
         for s in self.servers:
             if s.parent_server_id is not None:
                 self.children_map.setdefault(s.parent_server_id, []).append(s)
+        # Display-only Docker containers, grouped by the host that runs them.
+        # They are not in `servers` (never a job target), so they are attached
+        # purely as leaf nodes in the physical tree (see _server_node).
+        self.docker_map: dict[int, list[DockerContainer]] = {}
+        for c in db.scalars(select(DockerContainer)).all():
+            self.docker_map.setdefault(c.host_server_id, []).append(c)
         # Effective group ids (direct + ancestors) per server, for the dropdown
         # filter — a row matches whichever group it belongs to, anywhere it shows.
         self.eff_groups: dict[int, list[int]] = {
@@ -59,6 +65,12 @@ def _server_node(
     if nest_guests:
         for g in sorted(ctx.children_map.get(s.id, []), key=lambda x: x.name.lower()):
             children.append(_server_node(g, depth + 1, node_id, "guest", ctx, nest_guests=True))
+        # Docker containers running on this host, as display-only leaves.
+        for c in sorted(
+            ctx.docker_map.get(s.id, []),
+            key=lambda x: (x.name or x.container_id).lower(),
+        ):
+            children.append(_docker_node(c, depth + 1, node_id))
     # A virtualization host shows the expander even before a guest exists; inside
     # a group (nest_guests=False) members render as leaves regardless.
     has_children = bool(children) or (nest_guests and bool(s.virt_kind))
@@ -79,6 +91,27 @@ def _server_node(
         "data_search": s.name.lower(),
         "data_groups": " " + " ".join(str(g) for g in ctx.eff_groups.get(s.id, ())) + " ",
         "children": children,
+    }
+
+
+def _docker_node(c: DockerContainer, depth: int, parent_node_id: str) -> dict:
+    """A display-only leaf for one Docker container under its host."""
+    return {
+        "kind": "docker",
+        "depth": depth,
+        "node_id": f"{parent_node_id}/d{c.id}",
+        "parent_id": parent_node_id,
+        "has_children": False,
+        "label": c.name or c.container_id[:12],
+        "server": None,
+        "docker": c,
+        "virt_kind": None,
+        "guest_type": None,
+        "is_guest": True,
+        "synthetic": True,
+        "data_search": ((c.name or "") + " " + (c.image or "")).lower(),
+        "data_groups": "  ",
+        "children": [],
     }
 
 

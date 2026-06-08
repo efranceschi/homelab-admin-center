@@ -91,6 +91,47 @@ def parse_facts(text: str) -> dict[str, dict]:
     return out
 
 
+_DOCKER_RE = re.compile(r"PANEL_DOCKER\s+(\S+)\s+::\s+([A-Za-z0-9+/=]*)")
+_DOCKER_SENTINEL = "__DOCKER_PRESENT__"
+
+
+def parse_docker(text: str) -> dict[str, list[dict]]:
+    """Return ``{inventory_host: [container, …]}`` from the docker-probe marker.
+
+    The playbook emits one ``PANEL_DOCKER <inventory_host> :: <base64>`` line per
+    host that runs Docker. The decoded payload is a ``__DOCKER_PRESENT__``
+    sentinel followed by ``docker ps`` output as one ``{{json .}}`` object per
+    line. A host present in the result ran Docker (possibly with zero
+    containers, mapped to ``[]``); a host absent has no Docker (or was
+    unreachable) — the caller uses that distinction to set/clear ``virt_kind``.
+    A wrapped or garbled marker that fails to decode is skipped, never raised.
+    """
+    out: dict[str, list[dict]] = {}
+    for line in strip_ansi(text).splitlines():
+        if "PANEL_DOCKER" not in line:
+            continue
+        m = _DOCKER_RE.search(line)
+        if not m:
+            continue
+        try:
+            payload = base64.b64decode(m.group(2)).decode("utf-8", "replace")
+        except (ValueError, binascii.Error):
+            continue
+        containers: list[dict] = []
+        for row in payload.splitlines():
+            row = row.strip()
+            if not row or row == _DOCKER_SENTINEL:
+                continue
+            try:
+                obj = json.loads(row)
+            except (ValueError, json.JSONDecodeError):
+                continue
+            if isinstance(obj, dict):
+                containers.append(obj)
+        out[m.group(1)] = containers
+    return out
+
+
 def status_from_stats(stats: dict | None) -> str | None:
     if stats is None:
         return None

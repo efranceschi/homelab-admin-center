@@ -797,6 +797,9 @@ footer { color: var(--text-muted); border-color: var(--border-subtle) !important
 .host-tree .tree-vhost > td,
 .host-tree .tree-group > td { background: var(--fill-subtle, rgba(127,127,127,.06)); }
 .host-tree .tree-synthetic .tree-name { color: var(--text-muted); }
+/* Docker containers are synthetic leaves but keep a legible name. */
+.host-tree .tree-docker .tree-name { color: var(--text); }
+.host-tree .tree-docker .tree-ico { color: var(--bs-info, #0dcaf0); }
 
 /* === REDUCED MOTION ================================================== */
 @media (prefers-reduced-motion: reduce) {
