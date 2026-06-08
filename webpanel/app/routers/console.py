@@ -28,9 +28,9 @@ from ..console import (
     ConsoleError,
     ConsoleSession,
     manager as console_manager,
+    reap,
     set_winsize,
     spawn_pty,
-    terminate,
 )
 from ..db import db_dependency
 from ..models import AuditLog, User
@@ -191,16 +191,20 @@ async def _bridge(websocket: WebSocket, session: ConsoleSession) -> None:
 
     out_task = asyncio.create_task(pump_out())
     in_task = asyncio.create_task(pump_in())
+    # Also wake on a SIGHUP drain request (begin_drain sets this event).
+    drain_task = asyncio.create_task(session.close_requested.wait())
     try:
-        await asyncio.wait({out_task, in_task}, return_when=asyncio.FIRST_COMPLETED)
+        await asyncio.wait(
+            {out_task, in_task, drain_task}, return_when=asyncio.FIRST_COMPLETED
+        )
     finally:
         try:
             loop.remove_reader(master_fd)
         except (OSError, ValueError):
             pass
-        for t in (out_task, in_task):
+        for t in (out_task, in_task, drain_task):
             t.cancel()
-        # Reap the child off the loop, then drop the session (closes fd + key dir).
-        await loop.run_in_executor(None, terminate, proc)
+        # Reap off the loop: closes the master fd (HUP) then escalates killpg.
+        await loop.run_in_executor(None, reap, session)
         console_manager.close(session.token)
         await _safe_close(websocket)

@@ -33,6 +33,7 @@ import signal
 import struct
 import subprocess
 import termios
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -107,12 +108,11 @@ def _server_console_argv(srv: Server, run_dir: Path) -> list[str]:
     """Interactive shell argv for a managed Server."""
     ct = srv.connection_type
     if ct == "local":
-        # Root shell on the Proxmox node. Already-root: a login shell. Otherwise
-        # escalate via the one shell /etc/sudoers.d/hac whitelists (`/bin/sh`,
-        # NOPASSWD), then exec bash for a nicer prompt, falling back to sh.
-        if os.geteuid() == 0:
-            return ["/bin/bash", "-i"]
-        return proxmox._sudo_argv("/bin/sh", "-c", "exec /bin/bash -i || exec /bin/sh -i")
+        # Unprivileged shell on the Proxmox node as the panel's own user (`hac`):
+        # NO sudo — least privilege, and the panel can signal it directly. The
+        # admin escalates with `sudo pct …` inside if needed. (Falls back to sh
+        # only if bash is somehow absent, which it never is on a PVE node.)
+        return ["/bin/sh", "-c", "exec /bin/bash -i || exec /bin/sh -i"]
     if ct == "ssh":
         return _ssh_argv(srv, run_dir)
     if ct == "proxmox":
@@ -206,23 +206,45 @@ def spawn_pty(
     return master_fd, proc
 
 
-def terminate(proc: subprocess.Popen | None) -> None:
-    """Kill the child's whole process group (SIGTERM, then SIGKILL) and reap.
+def reap(session: "ConsoleSession") -> None:
+    """Tear down a live session's child process and PTY.
 
-    Blocking — callers on the event loop should run it in an executor."""
-    if proc is None or proc.poll() is not None:
+    **Close the master fd FIRST.** The LXC/docker shells run as *root* in a
+    separate session (via ``sudo``'s ``use_pty`` / ``pct enter``), so the
+    unprivileged ``hac`` panel cannot signal them, and interactive bash ignores
+    ``SIGTERM``. Closing the master delivers ``SIGHUP`` down the tty chain
+    (through sudo's own pty) and the root shell exits — the only reliable kill.
+    Then escalate ``killpg`` on the parts we *can* signal (sudo/pct/ssh) as a
+    fallback, and reap. Blocking — callers on the event loop run it in an
+    executor.
+    """
+    fd = session.master_fd
+    session.master_fd = None
+    if fd is not None:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+    proc = session.proc
+    if proc is None:
+        return
+    # Let the HUP propagate before escalating.
+    deadline = time.monotonic() + _TERM_GRACE_SECONDS
+    while proc.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if proc.poll() is not None:
         return
     try:
         pgid = os.getpgid(proc.pid)
     except OSError:
         return
-    for sig in (signal.SIGTERM, signal.SIGKILL):
+    for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGKILL):
         try:
             os.killpg(pgid, sig)
         except OSError:
             return
         try:
-            proc.wait(timeout=_TERM_GRACE_SECONDS)
+            proc.wait(timeout=1)
             return
         except subprocess.TimeoutExpired:
             continue
@@ -243,6 +265,10 @@ class ConsoleSession:
     proc: subprocess.Popen | None = None
     master_fd: int | None = None
     closed: asyncio.Event = field(default_factory=asyncio.Event)
+    # Set to ask the WebSocket bridge to tear itself down (SIGHUP drain). The
+    # bridge waits on this, so teardown runs on its own loop — no cross-thread
+    # fd-close race from begin_drain().
+    close_requested: asyncio.Event = field(default_factory=asyncio.Event)
 
 
 class ConsoleManager:
@@ -308,31 +334,30 @@ class ConsoleManager:
             self.close(token)
 
     def close(self, token: str) -> None:
-        """Tear down a session: kill the child, drop key material. Idempotent."""
+        """Drop a session from the registry and remove its key material.
+
+        Idempotent. The child process + PTY are torn down by :func:`reap` (run by
+        the WebSocket bridge); for a session that was never claimed (TTL expiry)
+        there is no child, so this is just the run-dir cleanup."""
         session = self._sessions.pop(token, None)
         if session is None:
             return
-        terminate(session.proc)
-        if session.master_fd is not None:
-            try:
-                os.close(session.master_fd)
-            except OSError:
-                pass
-            session.master_fd = None
+        reap(session)  # no-op fast path once the bridge has already reaped
         shutil.rmtree(session.run_dir, ignore_errors=True)
         session.closed.set()
 
     def begin_drain(self) -> None:
-        """Refuse new consoles and kill every live one (SIGHUP graceful restart).
+        """Refuse new consoles and ask every live one to close (SIGHUP restart).
 
-        Each child's death makes its WebSocket bridge see EOF and tear itself
-        down; consoles never participate in the job drain, so they can't extend
-        the restart window."""
+        Sets each session's ``close_requested`` event; the bridge waits on it and
+        tears itself down (HUP via :func:`reap`). Runs on the loop, so it never
+        blocks and there is no cross-thread fd-close race. Consoles never
+        participate in the job drain, so they can't extend the restart window."""
         self._draining = True
         for token in list(self._sessions):
             session = self._sessions.get(token)
             if session is not None:
-                terminate(session.proc)
+                session.close_requested.set()
 
 
 manager = ConsoleManager()
