@@ -7,7 +7,7 @@
    Imported `with context` so it sees csrf_token / current_role / hostname and
    can {% include "_host_state.html" %}. Rows carry data-search / data-groups for
    the client-side filter. #}
-{% from "_macros.html" import icon, brand %}
+{% from "_macros.html" import icon, brand, toggle_form %}
 
 {% macro tree_rows(nodes) %}
   {% for n in nodes %}
@@ -174,15 +174,7 @@
       </td>
       <td>{{ s.credential.name if s.credential else '—' }}</td>
       <td>
-        <form method="post" action="/hosts/{{ s.id }}/toggle" class="d-inline m-0">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <div class="form-check form-switch m-0">
-            <input class="form-check-input" type="checkbox" role="switch"
-                   {{ 'checked' if s.enabled }} onchange="this.form.submit()"
-                   title="{{ 'Enabled — switch off to disable' if s.enabled else 'Disabled — switch on to enable' }}"
-                   aria-label="{{ 'Disable host ' ~ s.name if s.enabled else 'Enable host ' ~ s.name }}">
-          </div>
-        </form>
+        {{ toggle_form('/hosts/' ~ s.id ~ '/toggle', s.enabled, 'host ' ~ s.name, csrf_token) }}
       </td>
       <td class="text-end text-nowrap">
         <span class="act-group">

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icon %}
+{% from "_macros.html" import icon, toggle_form %}
 {% block nav_active %}settings{% endblock %}
 {% block title %}Settings · {{ app_name }}{% endblock %}
 {% block page_icon %}settings{% endblock %}
@@ -146,11 +146,7 @@
         <td>{{ sn.label or '—' }}</td>
         <td class="mono">{{ sn.spec }}</td>
         <td>
-          <form method="post" action="/settings/subnets/{{ sn.id }}/toggle" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="act-btn {{ 'act-btn-success' if sn.enabled else '' }}"
-                    title="{{ 'Enabled — click to disable' if sn.enabled else 'Disabled — click to enable' }}"
-                    aria-label="{{ 'Disable subnet' if sn.enabled else 'Enable subnet' }}">{{ icon('power', 16) }}</button></form>
+          {{ toggle_form('/settings/subnets/' ~ sn.id ~ '/toggle', sn.enabled, 'subnet', csrf_token) }}
         </td>
         <td class="text-end">
           <button type="button" class="act-btn act-btn-danger"

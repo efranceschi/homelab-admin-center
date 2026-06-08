@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icon %}
+{% from "_macros.html" import icon, toggle_form %}
 {% block nav_active %}schedules{% endblock %}
 {% block autorefresh %}1{% endblock %}
 {% block title %}Schedule · {{ app_name }}{% endblock %}
@@ -46,11 +46,7 @@
         <td>{{ 'scan' if s.action == 'network_scan' else s.mode }}</td>
         <td class="small">{{ s.next_run_at.strftime('%Y-%m-%d %H:%M UTC') if s.next_run_at else '—' }}</td>
         <td>
-          <form method="post" action="/schedules/{{ s.id }}/toggle" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="act-btn {{ 'act-btn-success' if s.enabled else '' }}"
-                    title="{{ 'Enabled — click to disable' if s.enabled else 'Disabled — click to enable' }}"
-                    aria-label="{{ 'Disable schedule' if s.enabled else 'Enable schedule' }}">{{ icon('power', 16) }}</button></form>
+          {{ toggle_form('/schedules/' ~ s.id ~ '/toggle', s.enabled, 'schedule', csrf_token) }}
         </td>
         <td class="text-end">
           {% if current_role == 'admin' %}

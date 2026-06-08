@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icon %}
+{% from "_macros.html" import icon, state_badge %}
 {% block nav_active %}hosts{% endblock %}
 {% block autorefresh %}1{% endblock %}
 {% block title %}{{ server.name }} · {{ app_name }}{% endblock %}
@@ -69,7 +69,7 @@
       <dt class="col-sm-3">Credential</dt>
       <dd class="col-sm-9">{{ server.credential.name if server.credential else '—' }}</dd>
       <dt class="col-sm-3">Enabled</dt>
-      <dd class="col-sm-9">{% if server.enabled %}<span class="st st-ok">yes</span>{% else %}<span class="st st-idle">no</span>{% endif %}</dd>
+      <dd class="col-sm-9">{{ state_badge(server.enabled, 'yes', 'no') }}</dd>
       <dt class="col-sm-3">Config state</dt>
       <dd class="col-sm-9">{% set st = state %}{% set live = None %}{% include "_host_state.html" %}</dd>
       {% if state and state.reboot_required %}

@@ -54,6 +54,31 @@
 </svg>
 {%- endmacro %}
 
+{# Boolean enabled/disabled status badge — display only (not a control).
+   Standardised across pages so the same on/off concept always reads the same:
+   green check when on, grey cross when off. Pass labels to reword (e.g.
+   'yes'/'no') while keeping the icons and colours identical. #}
+{% macro state_badge(on, on_label='enabled', off_label='disabled') -%}
+  {%- if on -%}
+    <span class="st st-ok">{{ icon('check', 12) }} {{ on_label }}</span>
+  {%- else -%}
+    <span class="st st-idle">{{ icon('x', 12) }} {{ off_label }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{# Enable/disable toggle control — a power button inside a POST form, used
+   wherever something is switched on/off (plugins, schedules, subnets, hosts).
+   `noun` names the thing for the tooltip/aria-label; csrf_token must be passed
+   in because macros are imported without context. #}
+{% macro toggle_form(action, on, noun, csrf_token) -%}
+<form method="post" action="{{ action }}" class="d-inline m-0">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button class="act-btn {{ 'act-btn-success' if on else '' }}"
+          title="{{ 'Enabled — click to disable' if on else 'Disabled — click to enable' }}"
+          aria-label="{{ ('Disable ' ~ noun) if on else ('Enable ' ~ noun) }}">{{ icon('power', 16) }}</button>
+</form>
+{%- endmacro %}
+
 {# Job run-mode badge: makes it unmistakable whether a job is a dry run
    (--check, no changes) or a live apply (changes written to the host). #}
 {% macro mode_badge(mode) %}
