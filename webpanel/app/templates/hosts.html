@@ -12,10 +12,6 @@
             type="button" role="tab">{{ icon('server', 14) }} Managed hosts <span class="badge bg-secondary">{{ servers|length }}</span></button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="tab-creds-btn" data-bs-toggle="tab" data-bs-target="#tab-creds"
-            type="button" role="tab">{{ icon('key', 14) }} Credentials <span class="badge bg-secondary">{{ credentials|length }}</span></button>
-  </li>
-  <li class="nav-item" role="presentation">
     <button class="nav-link" id="tab-discovered-btn" data-bs-toggle="tab" data-bs-target="#tab-discovered"
             type="button" role="tab">{{ icon('search', 14) }} Discovered <span class="badge {{ 'bg-primary' if discovered_count else 'bg-secondary' }}">{{ discovered_count }}</span></button>
   </li>
@@ -136,34 +132,6 @@
       {% endfor %}
         <tr id="hf-empty" hidden><td colspan="7" class="text-muted text-center py-3">
           No hosts match the current filters.</td></tr>
-      </tbody>
-    </table></div>
-  </div>
-
-  {# ---- Credentials tab ---- #}
-  <div class="tab-pane fade" id="tab-creds" role="tabpanel">
-    <div class="d-flex justify-content-between align-items-center p-2 px-3 border-bottom">
-      <span class="text-muted small">Secrets encrypted at rest</span>
-      <button class="act-btn act-btn-primary" data-bs-toggle="modal" data-bs-target="#add-cred-modal"
-              title="Add credential" aria-label="Add credential">{{ icon('plus', 16) }}</button>
-    </div>
-    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Name</th><th>Type</th><th class="text-end">Actions</th></tr></thead>
-      <tbody>
-      {% for c in credentials %}
-        <tr>
-          <td>{{ c.name }}</td><td>{{ c.type }}</td>
-          <td class="text-end">
-            <button type="button" class="act-btn act-btn-danger"
-                    data-action="/hosts/credentials/{{ c.id }}/delete"
-                    data-title="Delete credential" data-ok="Delete"
-                    data-confirm="Delete credential “{{ c.name }}”? Hosts using it will lose access."
-                    title="Delete credential" aria-label="Delete credential {{ c.name }}">{{ icon('trash', 16) }}</button>
-          </td>
-        </tr>
-      {% else %}
-        <tr><td colspan="3" class="text-muted">No credentials yet.</td></tr>
-      {% endfor %}
       </tbody>
     </table></div>
   </div>
@@ -306,39 +274,6 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         <button class="btn btn-primary">Add host</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-{# ---- Add credential modal ----------------------------------------------- #}
-<div class="modal fade" id="add-cred-modal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <form class="modal-content" method="post" action="/hosts/credentials">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <div class="modal-header">
-        <h5 class="modal-title">Add credential</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-2"><label class="form-label">Name</label>
-          <input class="form-control form-control-sm" name="name" required></div>
-        <div class="mb-2"><label class="form-label">Type</label>
-          <select class="form-select form-select-sm" name="type">
-            <option value="ssh_key">ssh_key</option>
-            <option value="proxmox_token">proxmox_token</option>
-            <option value="vault_password">vault_password</option>
-            <option value="password">password</option>
-          </select></div>
-        <div class="mb-2"><label class="form-label">Secret</label>
-          <textarea class="form-control form-control-sm" name="secret" rows="4" required
-                    placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."></textarea></div>
-        <div class="mb-2"><label class="form-label">Note (optional)</label>
-          <input class="form-control form-control-sm" name="meta"></div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-primary">Add credential</button>
       </div>
     </form>
   </div>

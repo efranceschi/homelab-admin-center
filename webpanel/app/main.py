@@ -20,6 +20,7 @@ from .plugins import registry, sync_to_db
 from .templating import render
 from .routers import auth as auth_router
 from .routers import dashboard, hosts
+from .routers import credentials as credentials_router
 from .routers import groups as groups_router
 from .routers import jobs as jobs_router
 from .routers import plugins as plugins_router
@@ -161,6 +162,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router.router)
     app.include_router(dashboard.router)
     app.include_router(hosts.router)
+    app.include_router(credentials_router.router)
     app.include_router(groups_router.router)
     app.include_router(plugins_router.router)
     app.include_router(jobs_router.router)
