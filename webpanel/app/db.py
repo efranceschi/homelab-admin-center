@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import config
 from .models import Base
 
-SCHEMA_VERSION = "6"
+SCHEMA_VERSION = "7"
 
 # Columns added after the initial release, keyed by table. PRAGMA table_info is
 # the source of truth, so applying these is idempotent (only missing columns are
@@ -37,6 +37,17 @@ _ADDITIVE_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
     "schedules": [
         ("group_ids", "VARCHAR(512)"),
+    ],
+    # discovered_hosts was renamed to discoveries (see _migrate_pre_create) and
+    # generalized from "new hosts only" to any discovery kind. These columns are
+    # added to the renamed table; existing rows are backfilled in _migrate.
+    "discoveries": [
+        ("kind", "VARCHAR(16)"),
+        ("status", "VARCHAR(16)"),
+        ("server_id", "INTEGER"),
+        ("old_name", "VARCHAR(128)"),
+        ("new_name", "VARCHAR(128)"),
+        ("resolved_at", "DATETIME"),
     ],
 }
 
@@ -62,6 +73,44 @@ def init_engine() -> Engine:
     event.listen(_engine, "connect", _on_connect)
     _SessionFactory = sessionmaker(bind=_engine, expire_on_commit=False, future=True)
     return _engine
+
+
+def _table_columns(conn, table: str) -> set[str]:
+    rows = conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
+    return {r[1] for r in rows}  # r[1] == column name
+
+
+def _table_exists(conn, table: str) -> bool:
+    row = conn.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    return row is not None
+
+
+def _migrate_pre_create(engine: Engine) -> None:
+    """Structural migrations that must run BEFORE ``create_all``.
+
+    ``create_all`` would otherwise materialize an empty ``discoveries`` table and
+    block the rename. Idempotent: each step is guarded so reruns (and fresh
+    installs, where the legacy table is absent) are no-ops.
+
+    1. Rename ``discovered_hosts`` -> ``discoveries`` (the table now holds any
+       discovery kind, not just new hosts).
+    2. Rename the legacy running/stopped ``status`` column to ``status_text`` so
+       the freed ``status`` name can carry the discovery lifecycle. Needs SQLite
+       >= 3.34 (RENAME COLUMN); Proxmox ships newer.
+    """
+    with engine.begin() as conn:
+        if _table_exists(conn, "discovered_hosts") and not _table_exists(
+            conn, "discoveries"
+        ):
+            conn.exec_driver_sql("ALTER TABLE discovered_hosts RENAME TO discoveries")
+        if _table_exists(conn, "discoveries"):
+            cols = _table_columns(conn, "discoveries")
+            if "status" in cols and "status_text" not in cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE discoveries RENAME COLUMN status TO status_text"
+                )
 
 
 def _migrate(engine: Engine) -> None:
@@ -92,11 +141,36 @@ def _migrate(engine: Engine) -> None:
         conn.exec_driver_sql(
             "UPDATE host_state SET config_status='failed'  WHERE config_status='unknown'"
         )
+        # Backfill the generalized discoveries table. Pre-upgrade rows are all
+        # new_host; the old `dismissed` bool maps onto the lifecycle status.
+        # Idempotent: only ever touches rows left NULL by the additive ALTERs.
+        if _table_exists(conn, "discoveries"):
+            conn.exec_driver_sql(
+                "UPDATE discoveries SET kind='new_host' WHERE kind IS NULL"
+            )
+            cols = _table_columns(conn, "discoveries")
+            if "dismissed" in cols:
+                conn.exec_driver_sql(
+                    "UPDATE discoveries SET status='ignored' "
+                    "WHERE status IS NULL AND dismissed=1"
+                )
+            conn.exec_driver_sql(
+                "UPDATE discoveries SET status='pending' WHERE status IS NULL"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_discoveries_source_vmid "
+                "ON discoveries (source, proxmox_vmid)"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_discoveries_server_status "
+                "ON discoveries (server_id, status)"
+            )
 
 
 def init_db() -> None:
     """Create tables, apply additive migrations, and tighten DB permissions."""
     engine = init_engine()
+    _migrate_pre_create(engine)
     Base.metadata.create_all(engine)
     _migrate(engine)
     try:

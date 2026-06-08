@@ -7,7 +7,7 @@ import socket
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import crypto, discovery, proxmox
@@ -18,14 +18,17 @@ from ..jobs import manager
 from ..models import (
     AuditLog,
     Credential,
-    DiscoveredHost,
+    Discovery,
     HostEvent,
     HostState,
     Job,
     Plugin,
     Server,
     User,
+    utcnow,
 )
+
+DISCOVERY_STATUSES = ("pending", "ignored", "confirmed")
 from ..templating import render, templates
 
 router = APIRouter(prefix="/hosts")
@@ -84,13 +87,14 @@ def _stay(request: Request, default: str = "/hosts") -> RedirectResponse:
 @router.get("")
 def list_hosts(
     request: Request,
+    disc_status: str = "pending",
     db: Session = Depends(db_dependency),
     user: User = Depends(current_user),
 ):
-    # Keep managed Proxmox host names in lockstep with their containers: one
-    # pct list serves both the rename sync and the add-host picker below.
+    # One pct list serves both rename detection and the add-host picker below.
+    # Renames surface as pending name_change discoveries (not auto-applied).
     containers = proxmox.list_containers()
-    discovery.reconcile_proxmox_names(db, containers)
+    discovery.detect_proxmox_name_changes(db, containers)
     servers = db.scalars(select(Server).order_by(Server.name)).all()
     credentials = db.scalars(select(Credential).order_by(Credential.name)).all()
     states = {st.server_id: st for st in db.scalars(select(HostState)).all()}
@@ -100,11 +104,18 @@ def list_hosts(
         s.proxmox_vmid for s in servers if s.connection_type == "proxmox" and s.proxmox_vmid
     }
     available = [c for c in containers if c["vmid"] not in registered]
+    if disc_status not in DISCOVERY_STATUSES:
+        disc_status = "pending"
     discovered = db.scalars(
-        select(DiscoveredHost)
-        .where(DiscoveredHost.dismissed.is_(False))
-        .order_by(DiscoveredHost.last_seen.desc())
+        select(Discovery)
+        .where(Discovery.status == disc_status)
+        .order_by(Discovery.last_seen.desc())
     ).all()
+    # The tab badge always reflects outstanding (pending) discoveries, regardless
+    # of which status the user is currently filtering on.
+    pending_count = db.scalar(
+        select(func.count()).select_from(Discovery).where(Discovery.status == "pending")
+    )
     ood_count = sum(
         1
         for s in servers
@@ -122,7 +133,8 @@ def list_hosts(
         pct_containers=available,
         pct_available=proxmox.pct_path() is not None,
         discovered=discovered,
-        discovered_count=len(discovered),
+        discovered_count=pending_count,
+        disc_status=disc_status,
         ood_count=ood_count,
     )
 
@@ -424,39 +436,77 @@ async def discover_hosts(
     return _stay(request)
 
 
-@router.post("/discovered/{disc_id}/add", dependencies=[Depends(verify_csrf)])
-def add_discovered_host(
+@router.post("/discovered/{disc_id}/confirm", dependencies=[Depends(verify_csrf)])
+def confirm_discovery(
     disc_id: int,
     request: Request,
     db: Session = Depends(db_dependency),
     user: User = Depends(require_admin),
 ):
-    """Confirm a discovered container, registering it as a managed host."""
-    disc = db.get(DiscoveredHost, disc_id)
-    if disc is None:
+    """Apply a pending discovery: register a new host, or rename an existing one."""
+    disc = db.get(Discovery, disc_id)
+    if disc is None or disc.status != "pending":
         return _stay(request)
-    existing = db.scalars(select(Server)).all()
-    taken_names = {s.name for s in existing}
-    taken_vmids = {s.proxmox_vmid for s in existing if s.connection_type == "proxmox"}
-    _create_proxmox_server(
-        db, user, disc.proxmox_vmid, disc.name, taken_names, taken_vmids
-    )
-    db.delete(disc)
+    if disc.kind == "new_host":
+        existing = db.scalars(select(Server)).all()
+        taken_names = {s.name for s in existing}
+        taken_vmids = {
+            s.proxmox_vmid for s in existing if s.connection_type == "proxmox"
+        }
+        _create_proxmox_server(
+            db, user, disc.proxmox_vmid, disc.name, taken_names, taken_vmids
+        )
+    elif disc.kind == "name_change":
+        _apply_name_change(db, user, disc)
+    disc.status = "confirmed"
+    disc.resolved_at = utcnow()
+    db.add(AuditLog(
+        user_id=user.id, action="discovery.confirm", target=f"{disc.kind}:{disc.id}"
+    ))
     return _stay(request)
 
 
-@router.post("/discovered/{disc_id}/dismiss", dependencies=[Depends(verify_csrf)])
-def dismiss_discovered_host(
+@router.post("/discovered/{disc_id}/ignore", dependencies=[Depends(verify_csrf)])
+def ignore_discovery(
     disc_id: int,
     request: Request,
     db: Session = Depends(db_dependency),
     user: User = Depends(require_admin),
 ):
-    """Hide a discovered container so future scans don't re-surface it."""
-    disc = db.get(DiscoveredHost, disc_id)
-    if disc:
-        disc.dismissed = True
+    """Record an ignore decision so this discovery stops surfacing (kept as history)."""
+    disc = db.get(Discovery, disc_id)
+    if disc and disc.status == "pending":
+        disc.status = "ignored"
+        disc.resolved_at = utcnow()
+        db.add(AuditLog(
+            user_id=user.id, action="discovery.ignore", target=f"{disc.kind}:{disc.id}"
+        ))
     return _stay(request)
+
+
+def _apply_name_change(db: Session, user: User, disc: Discovery) -> None:
+    """Rename the host a name_change discovery points at to its new name.
+
+    Resolves a unique-name collision the same way new hosts do (a ``-{vmid}`` or
+    ``-{server_id}`` suffix) and records a ``name_sync`` event on the host timeline.
+    """
+    srv = db.get(Server, disc.server_id) if disc.server_id else None
+    if srv is None:
+        return
+    new = (disc.new_name or "").strip() or srv.name
+    taken = {s.name for s in db.scalars(select(Server)).all() if s.id != srv.id}
+    suffix = srv.proxmox_vmid or srv.id
+    candidate = new if new not in taken else f"{new}-{suffix}"
+    old = srv.name
+    if candidate == old:
+        return
+    srv.name = candidate
+    db.add(HostEvent(
+        server_id=srv.id,
+        kind="name_sync",
+        status=None,
+        message=f"Host renamed: {old} → {candidate}",
+    ))
 
 
 # --------------------------------------------------------------------------- #

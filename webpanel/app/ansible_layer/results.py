@@ -44,6 +44,22 @@ def parse_reboot(text: str) -> set[str]:
     return hosts
 
 
+def parse_hostnames(text: str) -> dict[str, str]:
+    """Return ``{inventory_host: live_os_hostname}`` from the facts-probe marker.
+
+    Mirrors :func:`parse_reboot`: the playbook's "panel facts probe" debug task
+    emits ``PANEL_HOSTNAME <inventory_host> :: <hostname> :: <fqdn>``. Hosts with
+    an empty gathered hostname are skipped.
+    """
+    out: dict[str, str] = {}
+    for line in strip_ansi(text).splitlines():
+        if "PANEL_HOSTNAME" in line:
+            m = re.search(r"PANEL_HOSTNAME\s+(\S+)\s+::\s+(\S*)\s+::", line)
+            if m and m.group(2):
+                out[m.group(1)] = m.group(2)
+    return out
+
+
 def status_from_stats(stats: dict | None) -> str | None:
     if stats is None:
         return None

@@ -32,6 +32,9 @@ HOUSEKEEP_SECONDS = 3600
 # How often to scan for unmanaged hosts (independent of any schedule). Also runs
 # once on startup, so a fresh deploy populates the discovered-hosts table soon.
 DISCOVERY_SECONDS = 86400
+# How often to probe each host's live hostname/facts (backstop to the
+# opportunistic refresh every check/apply run already does). Also runs on startup.
+PROBE_SECONDS = 21600  # 6h
 PIDFILE = config.RUN_DIRS / "scheduler.pid"
 
 
@@ -107,6 +110,7 @@ def run_scheduler() -> None:
 
     last_housekeep = 0.0  # 0 => run once on the first iteration
     last_discovery = 0.0  # 0 => run once on the first iteration
+    last_probe = 0.0  # 0 => run once on the first iteration
     while not running["stop"]:
         try:
             _tick()
@@ -128,6 +132,13 @@ def run_scheduler() -> None:
                 print(f"[scheduler] discovery {stats}", flush=True)
             except Exception as exc:
                 print(f"[scheduler] discovery error: {exc}", flush=True)
+        if now_mono - last_probe >= PROBE_SECONDS:
+            last_probe = now_mono
+            try:
+                stats = discovery.run_inventory_probe()
+                print(f"[scheduler] inventory probe {stats}", flush=True)
+            except Exception as exc:
+                print(f"[scheduler] inventory probe error: {exc}", flush=True)
         for _ in range(POLL_SECONDS):
             if running["stop"]:
                 break

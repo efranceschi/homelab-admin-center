@@ -39,6 +39,48 @@ class _Flock:
             self._fd = None
 
 
+def _reconcile_probed_hostnames(db: Session, servers, text: str) -> None:
+    """Feed the run's gathered hostnames into discovery (opportunistic refresh).
+
+    Every panel run emits the facts-probe marker (tagged ``always``), so each run
+    doubles as a hostname probe. Imported lazily to avoid an import cycle.
+    """
+    from .. import discovery
+
+    discovery.record_probe_hostnames(db, servers, results.parse_hostnames(text))
+
+
+def gather_hostnames(servers) -> dict[str, str]:
+    """Run a read-only facts-only pass and return ``{inventory_host: hostname}``.
+
+    Selects only the ``facts`` tag (roles are skipped) under ``--check``, sharing
+    the run flock so it never overlaps a real job. Returns ``{}`` if the lock is
+    held, ansible is unavailable, or nothing was gathered.
+    """
+    if not servers:
+        return {}
+    run_dir = config.RUN_DIRS / "facts-probe"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    host_vars = {s.id: {} for s in servers}
+    inv = inventory_builder.build_inventory(run_dir, servers, host_vars)
+    cmd = runner.build_command(inv, ["facts"], [s.name for s in servers], True, None, None)
+    env = runner.build_env()
+    log_path = run_dir / "stdout.log"
+    try:
+        with _Flock(config.RUN_LOCK_FILE):
+            with log_path.open("w") as log:
+                subprocess.run(
+                    cmd, cwd=str(config.ANSIBLE_ROOT), env=env,
+                    stdout=log, stderr=subprocess.STDOUT,
+                )
+    except OSError:
+        return {}
+    finally:
+        for key in run_dir.glob("id_*"):
+            key.unlink(missing_ok=True)
+    return results.parse_hostnames(log_path.read_text(errors="replace"))
+
+
 def run_now(
     db: Session,
     *,
@@ -117,6 +159,7 @@ def run_now(
     text = log_path.read_text(errors="replace")
     recap = results.parse_recap(text)
     reboot = results.parse_reboot(text)
+    _reconcile_probed_hostnames(db, servers, text)
     finished = datetime.now(timezone.utc)
     norm_mode = "apply" if mode == "apply" else "check"
     job.status = "success" if rc == 0 else "failed"

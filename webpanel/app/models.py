@@ -12,6 +12,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -286,29 +287,51 @@ class Schedule(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class DiscoveredHost(Base):
-    """A server found by a discovery scan but not yet registered as a Server.
+class Discovery(Base):
+    """A change the panel detected about the fleet, awaiting a decision.
 
-    Persisted (rather than computed live) so a dismissal sticks across scans and
-    the headless 24h scanner has a sink. One row per discovered container, keyed
-    on ``(source, proxmox_vmid)`` for idempotent upserts. Confirming a row
-    creates a :class:`Server` and deletes the row; dismissing hides it.
+    Generalizes the old discovered-hosts table. ``kind`` distinguishes a brand
+    new unmanaged host (``new_host``) from a hostname change on an existing one
+    (``name_change``); ``status`` tracks the lifecycle (``pending`` ->
+    ``confirmed`` | ``ignored``). Confirming applies the change (register the
+    host, or rename it); ignoring records the decision so a recurring identical
+    event is a no-op. Confirmed/ignored rows are retained as history.
+
+    Dedup is done in application code (see :mod:`app.discovery`), so there is no
+    unique constraint — the indexes below only speed the per-source / per-server
+    lookups. ``status_text`` holds the legacy running/stopped container state
+    (it was named ``status`` before this column carried the lifecycle).
     """
 
-    __tablename__ = "discovered_hosts"
-    __table_args__ = (UniqueConstraint("source", "proxmox_vmid"),)
+    __tablename__ = "discoveries"
+    __table_args__ = (
+        Index("ix_discoveries_source_vmid", "source", "proxmox_vmid"),
+        Index("ix_discoveries_server_status", "server_id", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    source: Mapped[str] = mapped_column(String(16), default="proxmox")  # proxmox
+    kind: Mapped[str] = mapped_column(String(16), default="new_host")  # new_host | name_change
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | confirmed | ignored
+    source: Mapped[str] = mapped_column(String(16), default="proxmox")  # proxmox | ssh | local
+    name: Mapped[str | None] = mapped_column(String(128))  # display label
+
+    # new_host fields
     proxmox_node: Mapped[str | None] = mapped_column(String(64))
     proxmox_vmid: Mapped[str | None] = mapped_column(String(16))
-    name: Mapped[str | None] = mapped_column(String(128))
-    status: Mapped[str | None] = mapped_column(String(32))  # running | stopped
-    dismissed: Mapped[bool] = mapped_column(Boolean, default=False)
+    status_text: Mapped[str | None] = mapped_column(String(32))  # running | stopped
+
+    # name_change fields (the host is already known)
+    server_id: Mapped[int | None] = mapped_column(
+        ForeignKey("servers.id", ondelete="CASCADE")
+    )
+    old_name: Mapped[str | None] = mapped_column(String(128))
+    new_name: Mapped[str | None] = mapped_column(String(128))
+
     first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Setting(Base):

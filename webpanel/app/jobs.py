@@ -300,6 +300,12 @@ class JobManager:
                     db, sid, rt.job_id, mode, new_status, cfg_status,
                     prev_status, pending, reachable=stats is not None,
                 )
+            # Opportunistic hostname refresh: every run emits the facts-probe
+            # marker (tagged `always`), so a finished job doubles as a probe.
+            from . import discovery
+
+            probed = [s for s in (db.get(Server, sid) for sid in server_ids) if s]
+            discovery.record_probe_hostnames(db, probed, results.parse_hostnames(text))
 
     @staticmethod
     def _record_host_event(

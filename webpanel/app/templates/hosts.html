@@ -168,47 +168,68 @@
     </table></div>
   </div>
 
-  {# ---- Discovered hosts tab ---- #}
+  {# ---- Discovered tab ---- #}
+  {# Any change the panel detected about the fleet (new hosts, hostname changes),
+     each awaiting a confirm/ignore decision. Filtered by lifecycle status. #}
   <div class="tab-pane fade" id="tab-discovered" role="tabpanel">
     <div class="d-flex justify-content-between align-items-center p-2 px-3 border-bottom">
-      <span class="text-muted small">Proxmox containers found on this node that aren't managed yet — scans run every 24h</span>
+      <span class="text-muted small">Changes detected across the fleet — new hosts and hostname changes. Scans run every 24h.</span>
       {% if current_role == 'admin' %}
       <form method="post" action="/hosts/discover" class="d-inline m-0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="act-btn act-btn-secondary" title="Scan now"
-                aria-label="Scan for hosts now">{{ icon('refresh', 16) }}</button>
+                aria-label="Scan for discoveries now">{{ icon('refresh', 16) }}</button>
       </form>
       {% endif %}
     </div>
+    <div class="p-2 px-3 border-bottom bg-body-tertiary">
+      <div class="btn-group btn-group-sm" role="group" aria-label="Discovery status filter">
+        {% for st in ['pending', 'ignored', 'confirmed'] %}
+        <a class="btn btn-outline-secondary{{ ' active' if disc_status == st else '' }}"
+           href="/hosts?disc_status={{ st }}#tab-discovered">{{ st|capitalize }}</a>
+        {% endfor %}
+      </div>
+    </div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Name</th><th>VMID</th><th>Status</th><th>First seen</th><th>Last seen</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th>Discovery</th><th>Source</th><th>First seen</th><th>Last seen</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
       {% for d in discovered %}
         <tr>
-          <td>{{ d.name or 'ct' ~ d.proxmox_vmid }}</td>
-          <td>{{ d.proxmox_vmid }}</td>
-          <td><span class="badge conn-proxmox">{{ d.status or '—' }}</span></td>
+          <td>
+            {% if d.kind == 'name_change' %}
+              <span class="badge bg-info-subtle text-info-emphasis me-1">Name change</span>
+              Host name changed: <code>{{ d.old_name }}</code> → <code>{{ d.new_name }}</code>
+            {% else %}
+              <span class="badge bg-primary-subtle text-primary-emphasis me-1">New host</span>
+              {{ d.name or 'ct' ~ d.proxmox_vmid }}
+              {% if d.proxmox_vmid %}<span class="text-muted small">· VMID {{ d.proxmox_vmid }}</span>{% endif %}
+              {% if d.status_text %}<span class="badge conn-proxmox ms-1">{{ d.status_text }}</span>{% endif %}
+            {% endif %}
+          </td>
+          <td><span class="badge conn-{{ d.source }}">{{ d.source }}</span></td>
           <td class="small">{{ d.first_seen.strftime('%Y-%m-%d %H:%M UTC') if d.first_seen else '—' }}</td>
           <td class="small">{{ d.last_seen.strftime('%Y-%m-%d %H:%M UTC') if d.last_seen else '—' }}</td>
           <td class="text-end">
-            {% if current_role == 'admin' %}
+            {% if d.status == 'pending' and current_role == 'admin' %}
             <span class="act-group">
               <button type="button" class="act-btn act-btn-primary"
-                      data-action="/hosts/discovered/{{ d.id }}/add"
-                      data-title="Add host" data-ok="Add" data-ok-class="btn-primary"
-                      data-confirm="Register “{{ d.name or 'ct' ~ d.proxmox_vmid }}” (VMID {{ d.proxmox_vmid }}) as a managed Proxmox host?"
-                      title="Add as managed host" aria-label="Add discovered host {{ d.name }}">{{ icon('plus', 16) }}</button>
+                      data-action="/hosts/discovered/{{ d.id }}/confirm"
+                      data-title="Confirm discovery" data-ok="Confirm" data-ok-class="btn-primary"
+                      data-confirm="{% if d.kind == 'name_change' %}Rename “{{ d.old_name }}” to “{{ d.new_name }}” in Hosts?{% else %}Register “{{ d.name or 'ct' ~ d.proxmox_vmid }}”{% if d.proxmox_vmid %} (VMID {{ d.proxmox_vmid }}){% endif %} as a managed host?{% endif %}"
+                      title="Confirm" aria-label="Confirm discovery">{{ icon('check', 16) }}</button>
               <button type="button" class="act-btn act-btn-danger"
-                      data-action="/hosts/discovered/{{ d.id }}/dismiss"
-                      data-title="Dismiss" data-ok="Dismiss"
-                      data-confirm="Dismiss “{{ d.name or 'ct' ~ d.proxmox_vmid }}”? Future scans won't re-surface it."
-                      title="Dismiss" aria-label="Dismiss discovered host {{ d.name }}">{{ icon('trash', 16) }}</button>
+                      data-action="/hosts/discovered/{{ d.id }}/ignore"
+                      data-title="Ignore discovery" data-ok="Ignore"
+                      data-confirm="Ignore this discovery? It won't surface again unless it changes."
+                      title="Ignore" aria-label="Ignore discovery">{{ icon('x', 16) }}</button>
             </span>
-            {% else %}<span class="text-muted">—</span>{% endif %}
+            {% else %}
+              <span class="badge {{ 'bg-success-subtle text-success-emphasis' if d.status == 'confirmed' else 'bg-secondary' }}">{{ d.status }}</span>
+            {% endif %}
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="text-muted">No undiscovered containers — run a scan.</td></tr>
+        <tr><td colspan="5" class="text-muted">No {{ disc_status }} discoveries.</td></tr>
       {% endfor %}
       </tbody>
     </table></div>
@@ -323,6 +344,15 @@
 </div>
 
 <script>
+  // Open the tab named by the URL hash (e.g. the Discovered status-filter links
+  // reload to /hosts?disc_status=…#tab-discovered and must reopen that tab).
+  (function () {
+    const hash = window.location.hash;
+    if (!hash) return;
+    const btn = document.querySelector('[data-bs-target="' + hash + '"]');
+    if (btn && window.bootstrap) bootstrap.Tab.getOrCreateInstance(btn).show();
+  })();
+
   // Add host modal: show only the active connection-type fields. Proxmox adds
   // one host per selected container (or all), so the single Name field is hidden
   // and not required there; the "All containers" switch disables the per-row

@@ -22,6 +22,17 @@
       tags: [apt, updates]
 
   post_tasks:
+    # `always` so the panel captures the live hostname on every run regardless of
+    # which --tags were selected; `facts` lets the inventory probe run this alone
+    # (--tags facts skips the roles). Parsed by ansible_layer/results.parse_hostnames.
+    - name: Report OS hostname (panel facts probe)
+      ansible.builtin.debug:
+        msg: >-
+          PANEL_HOSTNAME {{ inventory_hostname }} ::
+          {{ ansible_hostname | default('') }} ::
+          {{ ansible_fqdn | default('') }}
+      tags: [facts, always]
+
     - name: Detect reboot requirement
       ansible.builtin.stat:
         path: /var/run/reboot-required
