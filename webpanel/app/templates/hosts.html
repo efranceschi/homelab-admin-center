@@ -345,15 +345,6 @@
 </div>
 
 <script>
-  // Open the tab named by the URL hash (e.g. the Discovered status-filter links
-  // reload to /hosts?disc_status=…#tab-discovered and must reopen that tab).
-  (function () {
-    const hash = window.location.hash;
-    if (!hash) return;
-    const btn = document.querySelector('[data-bs-target="' + hash + '"]');
-    if (btn && window.bootstrap) bootstrap.Tab.getOrCreateInstance(btn).show();
-  })();
-
   // Add host modal: show only the active connection-type fields. Proxmox adds
   // one host per selected container (or all), so the single Name field is hidden
   // and not required there; the "All containers" switch disables the per-row

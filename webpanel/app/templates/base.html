@@ -231,6 +231,31 @@ document.addEventListener('submit', function (ev) {
   if (backdrop) backdrop.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
 })();
 
+// Tab persistence: keep the selected tab across full-page refreshes (auto-
+// refresh reloads and button actions that redirect back via Referer, which
+// drops the URL #fragment). Generic for any page with Bootstrap .nav-tabs.
+// Restore precedence: explicit URL hash > sessionStorage (per pathname).
+(function () {
+  if (!window.bootstrap) return;
+  const tabs = Array.from(document.querySelectorAll('.nav-tabs [data-bs-toggle="tab"]'));
+  if (!tabs.length) return;
+  const key = 'hac:tab:' + location.pathname;
+  const btnFor = (target) =>
+    target && document.querySelector('.nav-tabs [data-bs-toggle="tab"][data-bs-target="' + target + '"]');
+
+  // Persist whichever tab becomes active.
+  tabs.forEach(btn => btn.addEventListener('shown.bs.tab', function (ev) {
+    const target = ev.target.getAttribute('data-bs-target');
+    if (target) try { sessionStorage.setItem(key, target); } catch (e) { /* storage off */ }
+  }));
+
+  // Restore on load: hash wins (explicit links), else the stored tab.
+  let restore = btnFor(window.location.hash) ? window.location.hash : null;
+  if (!restore) { try { restore = sessionStorage.getItem(key); } catch (e) { /* storage off */ } }
+  const btn = btnFor(restore);
+  if (btn) bootstrap.Tab.getOrCreateInstance(btn).show();
+})();
+
 // Auto-refresh of volatile views (dashboard/jobs/hosts/schedules). Interval set
 // per-page via body[data-autorefresh] (seconds, from Settings). To avoid yanking
 // the page out from under the user, a tick is skipped (and re-armed) when a modal
