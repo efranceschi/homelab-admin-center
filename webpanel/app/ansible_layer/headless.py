@@ -137,7 +137,7 @@ def run_now(
         if st is not None:
             state.last_status = st
         state.reboot_required = srv.name in reboot
-        cfg_status, pending = results.derive_config_state(
+        cfg_status, pending = results.derive_host_state(
             norm_mode, stats, reachable=stats is not None
         )
         state.config_status = cfg_status

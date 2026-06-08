@@ -54,26 +54,24 @@ def status_from_stats(stats: dict | None) -> str | None:
     return "ok"
 
 
-def derive_config_state(
+def derive_host_state(
     mode: str, stats: dict | None, reachable: bool
-) -> tuple[str | None, int]:
-    """Derive the (config_status, pending_changes) of one host from a run.
+) -> tuple[str, int]:
+    """Derive the settled (config_status, pending_changes) of one host from a run.
+
+    A single state, reflecting only the last execution and always overwritten:
+
+        unreachable / no recap / failed > 0  -> ('failed', 0)
+        check, changed > 0                   -> ('pending', changed)
+        check, changed == 0                  -> ('ok', 0)
+        apply, failed == 0                   -> ('ok', 0)   # converged
 
     Drift is detected in check mode: ``changed`` tasks are ones that *would*
-    change, i.e. the host is out of date. In apply mode a clean run means the
-    host just converged, so it is up to date regardless of the changed count.
-
-        unreachable / no recap line     -> ('unknown', 0)
-        failed > 0                      -> ('unknown', 0)
-        check, changed > 0              -> ('out_of_date', changed)
-        check, changed == 0             -> ('updated', 0)
-        apply, failed == 0              -> ('updated', 0)   # converged
+    change, i.e. updates are pending to apply. In apply mode a clean run means
+    the host just converged, so it is up to date regardless of the changed count.
     """
-    if not reachable or stats is None:
-        return "unknown", 0
-    if stats.get("failed", 0) > 0:
-        return "unknown", 0
-    changed = stats.get("changed", 0)
-    if mode == "check" and changed > 0:
-        return "out_of_date", changed
-    return "updated", 0
+    if not reachable or stats is None or stats.get("failed", 0) > 0:
+        return "failed", 0
+    if mode == "check" and stats.get("changed", 0) > 0:
+        return "pending", stats["changed"]
+    return "ok", 0

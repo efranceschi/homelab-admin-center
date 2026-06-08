@@ -290,7 +290,7 @@ class JobManager:
                     state.last_status = new_status
                 state.reboot_required = srv.name in reboot_hosts
                 prev_status = state.config_status
-                cfg_status, pending = results.derive_config_state(
+                cfg_status, pending = results.derive_host_state(
                     mode, stats, reachable=stats is not None
                 )
                 state.config_status = cfg_status

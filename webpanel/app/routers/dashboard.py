@@ -24,8 +24,8 @@ def dashboard(
     recent = db.scalars(select(Job).order_by(Job.id.desc()).limit(12)).all()
     plugins = db.scalars(select(Plugin).order_by(Plugin.order)).all()
 
-    # Config drift distribution across ALL hosts (no state row => unknown).
-    cfg = {"updated": 0, "out_of_date": 0, "unknown": 0}
+    # Settled host-state distribution across ALL hosts (no state row => unknown).
+    cfg = {"ok": 0, "pending": 0, "failed": 0, "unknown": 0}
     last = {"ok": 0, "changed": 0, "failed": 0, "none": 0}
     attention: list[dict] = []
     for s in servers:
@@ -36,10 +36,10 @@ def dashboard(
         cfg[status] += 1
         ls = (st.last_status if st else None) or "none"
         last[ls if ls in last else "none"] += 1
-        if status == "out_of_date":
-            attention.append({"name": s.name, "kind": "out_of_date",
+        if status == "pending":
+            attention.append({"name": s.name, "kind": "pending",
                               "detail": (st.pending_changes if st else 0)})
-        elif st and st.last_status == "failed":
+        elif status == "failed":
             attention.append({"name": s.name, "kind": "failed", "detail": None})
         elif st and st.reboot_required:
             attention.append({"name": s.name, "kind": "reboot", "detail": None})
@@ -56,15 +56,16 @@ def dashboard(
         "plugins_enabled": sum(1 for p in plugins if p.enabled),
         "plugins_total": len(plugins),
         "reboot": sum(1 for st in states.values() if st.reboot_required),
-        "failed": last["failed"],
-        "updated": cfg["updated"],
-        "out_of_date": cfg["out_of_date"],
+        "failed": cfg["failed"],
+        "ok": cfg["ok"],
+        "pending": cfg["pending"],
         "unknown": cfg["unknown"],
-        "health_pct": round(cfg["updated"] / total * 100) if total else 0,
+        "health_pct": round(cfg["ok"] / total * 100) if total else 0,
     }
     config_segments = [
-        {"label": "Updated", "value": cfg["updated"], "color": "#198754"},
-        {"label": "Out of date", "value": cfg["out_of_date"], "color": "#ffc107"},
+        {"label": "OK", "value": cfg["ok"], "color": "#198754"},
+        {"label": "Pending Updates", "value": cfg["pending"], "color": "#ffc107"},
+        {"label": "Failed", "value": cfg["failed"], "color": "#dc3545"},
         {"label": "Unknown", "value": cfg["unknown"], "color": "#adb5bd"},
     ]
     status_segments = [

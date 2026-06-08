@@ -226,8 +226,8 @@ class HostState(Base):
     reboot_required: Mapped[bool] = mapped_column(Boolean, default=False)
     facts_json: Mapped[str] = mapped_column(Text, default="{}")
     plugin_state_json: Mapped[str] = mapped_column(Text, default="{}")
-    # Configuration drift state, derived from --check runs (NULL = unknown).
-    config_status: Mapped[str | None] = mapped_column(String(16))  # updated|out_of_date|unknown
+    # Settled host state from the last run, always overwritten (NULL = never run).
+    config_status: Mapped[str | None] = mapped_column(String(16))  # ok|pending|failed
     config_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pending_changes: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(
@@ -252,7 +252,7 @@ class HostEvent(Base):
         ForeignKey("servers.id", ondelete="CASCADE"), nullable=False
     )
     kind: Mapped[str] = mapped_column(String(16), nullable=False)  # check|apply|name_sync
-    status: Mapped[str | None] = mapped_column(String(16))  # ok|changed|failed|updated|out_of_date
+    status: Mapped[str | None] = mapped_column(String(16))  # ok|changed|failed|pending|updated|out_of_date
     message: Mapped[str] = mapped_column(Text, default="")
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

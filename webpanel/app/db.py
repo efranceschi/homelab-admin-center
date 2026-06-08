@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import config
 from .models import Base
 
-SCHEMA_VERSION = "5"
+SCHEMA_VERSION = "6"
 
 # Columns added after the initial release, keyed by table. PRAGMA table_info is
 # the source of truth, so applying these is idempotent (only missing columns are
@@ -80,6 +80,18 @@ def _migrate(engine: Engine) -> None:
                     conn.exec_driver_sql(
                         f"ALTER TABLE {table} ADD COLUMN {name} {type_clause}"
                     )
+        # Collapse the legacy two-axis drift vocabulary onto the single settled
+        # host state (ok|pending|failed). Idempotent: live runs never re-create
+        # the old values, so this only ever touches pre-upgrade rows.
+        conn.exec_driver_sql(
+            "UPDATE host_state SET config_status='ok'      WHERE config_status='updated'"
+        )
+        conn.exec_driver_sql(
+            "UPDATE host_state SET config_status='pending' WHERE config_status='out_of_date'"
+        )
+        conn.exec_driver_sql(
+            "UPDATE host_state SET config_status='failed'  WHERE config_status='unknown'"
+        )
 
 
 def init_db() -> None:

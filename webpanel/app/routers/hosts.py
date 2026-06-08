@@ -110,7 +110,7 @@ def list_hosts(
         for s in servers
         if s.enabled
         and states.get(s.id)
-        and states[s.id].config_status == "out_of_date"
+        and states[s.id].config_status == "pending"
     )
     return render(
         request,
@@ -147,7 +147,7 @@ def host_states(
         cells[str(srv.id)] = tmpl.render(st=st, live=live.get(srv.id))
         drift[str(srv.id)] = (
             st.config_status
-            if st and st.config_status in ("updated", "out_of_date")
+            if st and st.config_status in ("ok", "pending", "failed")
             else "unknown"
         )
     return JSONResponse({"busy": bool(live), "cells": cells, "states": drift})
@@ -217,7 +217,7 @@ async def apply_all_hosts(
     rows = db.scalars(
         select(Server)
         .join(HostState, HostState.server_id == Server.id)
-        .where(Server.enabled.is_(True), HostState.config_status == "out_of_date")
+        .where(Server.enabled.is_(True), HostState.config_status == "pending")
         .order_by(Server.name)
     ).all()
     server_ids = [s.id for s in rows]
@@ -230,7 +230,7 @@ async def apply_all_hosts(
         )
     except (JobBusyError, ValueError) as exc:
         return render(request, "error.html", message=str(exc))
-    db.add(AuditLog(user_id=user.id, action="host.apply_all", target="out_of_date"))
+    db.add(AuditLog(user_id=user.id, action="host.apply_all", target="pending"))
     return _stay(request)
 
 

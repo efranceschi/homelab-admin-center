@@ -43,20 +43,21 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button class="act-btn act-btn-secondary" title="Check all hosts (drift check)" aria-label="Check all hosts">{{ icon('search', 16) }}</button>
   </form>
-  {% if current_role == 'admin' and counts.out_of_date %}
+  {% if current_role == 'admin' and counts.pending %}
   <button type="button" class="act-btn act-btn-primary"
           data-action="/hosts/apply-all"
-          data-title="Apply all out-of-date hosts" data-ok="Apply all" data-ok-class="btn-warning"
-          data-confirm="Apply configuration to the {{ counts.out_of_date }} host(s) flagged out of date by the last check? This starts one apply job."
-          title="Apply all out-of-date hosts ({{ counts.out_of_date }})" aria-label="Apply all out-of-date hosts ({{ counts.out_of_date }})">{{ icon('play', 16) }}</button>
+          data-title="Apply all pending hosts" data-ok="Apply Updates" data-ok-class="btn-warning"
+          data-confirm="Apply configuration to the {{ counts.pending }} host(s) with pending updates from the last check? This starts one apply job."
+          title="Apply all hosts with pending updates ({{ counts.pending }})" aria-label="Apply all hosts with pending updates ({{ counts.pending }})">{{ icon('play', 16) }}</button>
   {% endif %}
 </div>
 
 {# ---- KPI strip ---------------------------------------------------------- #}
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-2"><div class="kpi kpi-primary anim-in"><span class="kpi-ico">{{ icon('server', 18) }}</span><div class="kpi-num">{{ counts.servers }}</div><div class="kpi-cap">Hosts</div></div></div>
-  <div class="col-6 col-lg-2"><div class="kpi kpi-success anim-in"><span class="kpi-ico">{{ icon('check', 18) }}</span><div class="kpi-num">{{ counts.updated }}</div><div class="kpi-cap">Updated</div></div></div>
-  <div class="col-6 col-lg-2"><div class="kpi kpi-warning anim-in"><span class="kpi-ico">{{ icon('alert', 18) }}</span><div class="kpi-num">{{ counts.out_of_date }}</div><div class="kpi-cap">Out of date</div></div></div>
+  <div class="col-6 col-lg-2"><div class="kpi kpi-success anim-in"><span class="kpi-ico">{{ icon('check', 18) }}</span><div class="kpi-num">{{ counts.ok }}</div><div class="kpi-cap">OK</div></div></div>
+  <div class="col-6 col-lg-2"><div class="kpi kpi-warning anim-in"><span class="kpi-ico">{{ icon('alert', 18) }}</span><div class="kpi-num">{{ counts.pending }}</div><div class="kpi-cap">Pending</div></div></div>
+  <div class="col-6 col-lg-2"><div class="kpi kpi-danger anim-in"><span class="kpi-ico">{{ icon('x', 18) }}</span><div class="kpi-num">{{ counts.failed }}</div><div class="kpi-cap">Failed</div></div></div>
   <div class="col-6 col-lg-2"><div class="kpi kpi-muted anim-in"><span class="kpi-ico">{{ icon('search', 18) }}</span><div class="kpi-num">{{ counts.unknown }}</div><div class="kpi-cap">Unknown</div></div></div>
   <div class="col-6 col-lg-2"><div class="kpi kpi-danger anim-in"><span class="kpi-ico">{{ icon('power', 18) }}</span><div class="kpi-num">{{ counts.reboot }}</div><div class="kpi-cap">Reboot req.</div></div></div>
   <div class="col-6 col-lg-2"><div class="kpi kpi-info anim-in"><span class="kpi-ico">{{ icon('package', 18) }}</span><div class="kpi-num">{{ counts.plugins_enabled }}</div><div class="kpi-cap">Plugins on</div></div></div>
@@ -88,14 +89,15 @@
         <div class="text-muted">hosts up to date</div>
       </div>
       <div class="progress mb-3" style="height:14px">
-        <div class="progress-bar bg-success" style="width:{{ counts.updated / counts.servers * 100 if counts.servers else 0 }}%"></div>
-        <div class="progress-bar bg-warning" style="width:{{ counts.out_of_date / counts.servers * 100 if counts.servers else 0 }}%"></div>
+        <div class="progress-bar bg-success" style="width:{{ counts.ok / counts.servers * 100 if counts.servers else 0 }}%"></div>
+        <div class="progress-bar bg-warning" style="width:{{ counts.pending / counts.servers * 100 if counts.servers else 0 }}%"></div>
+        <div class="progress-bar bg-danger" style="width:{{ counts.failed / counts.servers * 100 if counts.servers else 0 }}%"></div>
         <div class="progress-bar bg-secondary" style="width:{{ counts.unknown / counts.servers * 100 if counts.servers else 0 }}%"></div>
       </div>
       <ul class="list-unstyled small mb-0 mt-auto">
         <li class="d-flex justify-content-between"><span><span class="dot" style="background:#0d6efd"></span>Enabled hosts</span><b>{{ counts.enabled }}/{{ counts.servers }}</b></li>
         <li class="d-flex justify-content-between"><span><span class="dot" style="background:#6f42c1"></span>Plugins</span><b>{{ counts.plugins_enabled }}/{{ counts.plugins_total }}</b></li>
-        <li class="d-flex justify-content-between"><span><span class="dot" style="background:#dc3545"></span>Failed last run</span><b>{{ counts.failed }}</b></li>
+        <li class="d-flex justify-content-between"><span><span class="dot" style="background:#dc3545"></span>Failed hosts</span><b>{{ counts.failed }}</b></li>
       </ul>
     </div></div>
   </div>
@@ -110,24 +112,24 @@
       {% else %}<span class="st st-ok">{{ icon('check', 12) }} clear</span>{% endif %}</div>
     <div class="card-body p-0">
       {% if attention %}
-      {% set ood = attention|selectattr('kind','equalto','out_of_date')|list|length %}
+      {% set ood = attention|selectattr('kind','equalto','pending')|list|length %}
       {% set kfail = attention|selectattr('kind','equalto','failed')|list|length %}
       {% set kreboot = attention|selectattr('kind','equalto','reboot')|list|length %}
       <div class="sev-summary">
-        {% if ood %}<div class="sev-pill warn"><div class="sev-n">{{ ood }}</div><div class="sev-l">out of date</div></div>{% endif %}
+        {% if ood %}<div class="sev-pill warn"><div class="sev-n">{{ ood }}</div><div class="sev-l">pending updates</div></div>{% endif %}
         {% if kfail %}<div class="sev-pill error"><div class="sev-n">{{ kfail }}</div><div class="sev-l">failed</div></div>{% endif %}
         {% if kreboot %}<div class="sev-pill info"><div class="sev-n">{{ kreboot }}</div><div class="sev-l">reboot</div></div>{% endif %}
       </div>
       <div class="list-scroll">
         {% for a in attention %}
-        <a href="/hosts" class="lrow {{ 'sv-warn' if a.kind=='out_of_date' else ('sv-error' if a.kind=='failed' else 'sv-info') }}">
-          <span class="row-tile {{ 'warn' if a.kind=='out_of_date' else ('error' if a.kind=='failed' else 'info') }}">
-            {{ icon('alert', 16) if a.kind=='out_of_date' else (icon('x', 16) if a.kind=='failed' else icon('power', 16)) }}
+        <a href="/hosts" class="lrow {{ 'sv-warn' if a.kind=='pending' else ('sv-error' if a.kind=='failed' else 'sv-info') }}">
+          <span class="row-tile {{ 'warn' if a.kind=='pending' else ('error' if a.kind=='failed' else 'info') }}">
+            {{ icon('alert', 16) if a.kind=='pending' else (icon('x', 16) if a.kind=='failed' else icon('power', 16)) }}
           </span>
           <span class="row-body">
             <span class="row-name">{{ a.name }}</span>
             <span class="row-sub">
-              {%- if a.kind=='out_of_date' %}configuration out of date{% if a.detail %} · {{ a.detail }} pending{% endif %}
+              {%- if a.kind=='pending' %}pending updates{% if a.detail %} · {{ a.detail }} change(s){% endif %}
               {%- elif a.kind=='failed' %}last run failed
               {%- else %}reboot required{% endif -%}
             </span>

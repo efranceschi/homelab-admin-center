@@ -75,7 +75,7 @@ def _resolve_plugins(db, sched: Schedule) -> list[str]:
             ).all()
         ]
     # In check mode, drop plugins that can't be dry-run safely: their tasks
-    # report spurious `changed` under --check and flap the host to out_of_date,
+    # report spurious `changed` under --check and flap the host to pending,
     # which a later panel-triggered check (check-safe surface only) then clears.
     # Mirror that surface here so both paths agree. See _enabled_plugin_keys.
     if sched.mode == "check":

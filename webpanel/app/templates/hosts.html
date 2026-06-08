@@ -35,9 +35,9 @@
         {% if current_role == 'admin' and ood_count %}
         <button type="button" class="act-btn act-btn-primary"
                 data-action="/hosts/apply-all"
-                data-title="Apply all out-of-date hosts" data-ok="Apply all" data-ok-class="btn-warning"
-                data-confirm="Apply configuration to the {{ ood_count }} host(s) flagged out of date by the last check? This starts one apply job."
-                title="Apply all out-of-date hosts ({{ ood_count }})" aria-label="Apply all out-of-date hosts ({{ ood_count }})">{{ icon('play', 16) }}</button>
+                data-title="Apply all pending hosts" data-ok="Apply Updates" data-ok-class="btn-warning"
+                data-confirm="Apply configuration to the {{ ood_count }} host(s) with pending updates from the last check? This starts one apply job."
+                title="Apply all hosts with pending updates ({{ ood_count }})" aria-label="Apply all hosts with pending updates ({{ ood_count }})">{{ icon('play', 16) }}</button>
         {% endif %}
         <button class="act-btn act-btn-primary" data-bs-toggle="modal" data-bs-target="#add-host-modal"
                 title="Add host" aria-label="Add host">{{ icon('plus', 16) }}</button>
@@ -111,12 +111,12 @@
           </td>
           <td class="text-end text-nowrap">
             <span class="act-group">
-            {% if st and st.config_status == 'out_of_date' and current_role == 'admin' %}
+            {% if st and st.config_status == 'pending' and current_role == 'admin' %}
             <button type="button" class="act-btn act-btn-primary"
                     data-action="/hosts/{{ s.id }}/apply"
-                    data-title="Apply host" data-ok="Apply" data-ok-class="btn-warning"
+                    data-title="Apply updates" data-ok="Apply Updates" data-ok-class="btn-warning"
                     data-confirm="Apply configuration to “{{ s.name }}” to bring it up to date?"
-                    title="Apply configuration" aria-label="Apply configuration to {{ s.name }}">{{ icon('play', 16) }}</button>
+                    title="Apply Updates" aria-label="Apply updates to {{ s.name }}">{{ icon('play', 16) }}</button>
             {% endif %}
             <button type="button" class="act-btn act-btn-secondary"
                     data-action="/hosts/{{ s.id }}/check"

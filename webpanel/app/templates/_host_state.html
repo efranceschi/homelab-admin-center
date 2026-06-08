@@ -16,10 +16,12 @@
     Applying…</span>
 {%- elif act == 'queued' %}
   <span class="st st-idle">Queued</span>
-{%- elif st and st.config_status == 'out_of_date' %}
-  <span class="st st-warn">Out of date{% if st.pending_changes %} ({{ st.pending_changes }}){% endif %}</span>
-{%- elif st and st.config_status == 'updated' %}
-  <span class="st st-ok">Updated</span>
+{%- elif st and st.config_status == 'failed' %}
+  <span class="st st-error">Failed</span>
+{%- elif st and st.config_status == 'pending' %}
+  <span class="st st-warn">Pending Updates{% if st.pending_changes %} ({{ st.pending_changes }}){% endif %}</span>
+{%- elif st and st.config_status == 'ok' %}
+  <span class="st st-ok">OK</span>
 {%- else %}
   <span class="st st-idle">Unknown</span>
 {%- endif %}
