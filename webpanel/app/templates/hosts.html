@@ -177,8 +177,9 @@
       {% if current_role == 'admin' %}
       <form method="post" action="/hosts/discover" class="d-inline m-0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="act-btn act-btn-secondary" title="Scan now"
-                aria-label="Scan for discoveries now">{{ icon('refresh', 16) }}</button>
+        <button class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1"
+                title="Scan for discoveries now"
+                aria-label="Scan for discoveries now">{{ icon('search', 14) }} Scan</button>
       </form>
       {% endif %}
     </div>
