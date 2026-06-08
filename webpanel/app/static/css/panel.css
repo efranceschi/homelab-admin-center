@@ -778,6 +778,26 @@ footer { color: var(--text-muted); border-color: var(--border-subtle) !important
 .log-view::-webkit-scrollbar { width: 6px; }
 .log-view::-webkit-scrollbar-thumb { background: var(--border-active); }
 
+/* === HOSTS TREE ===================================================== */
+/* Collapsible hierarchy in the Managed-hosts table. Children are sibling rows
+   (data-parent); the chevron rotates when its node is open. */
+.host-tree .tree-name { white-space: nowrap; }
+.tree-indent { display: inline-block; width: calc(var(--d, 0) * 1.15rem); }
+.tree-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.1rem; height: 1.1rem; padding: 0; margin-right: .15rem;
+  border: 0; background: transparent; color: var(--text-muted); cursor: pointer;
+  transition: transform .12s ease;
+}
+.tree-toggle:hover { color: var(--text); }
+.tree-row.is-open > .tree-name > .tree-toggle { transform: rotate(90deg); }
+.tree-toggle-spacer { display: inline-block; width: 1.25rem; }
+.tree-ico { margin-right: .25rem; vertical-align: -2px; }
+/* Parent bands read as containers; leaves sit flush. */
+.host-tree .tree-vhost > td,
+.host-tree .tree-group > td { background: var(--fill-subtle, rgba(127,127,127,.06)); }
+.host-tree .tree-synthetic .tree-name { color: var(--text-muted); }
+
 /* === REDUCED MOTION ================================================== */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

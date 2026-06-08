@@ -72,6 +72,20 @@ class Server(Base):
     proxmox_node: Mapped[str | None] = mapped_column(String(64))
     proxmox_vmid: Mapped[str | None] = mapped_column(String(16))
     proxmox_endpoint: Mapped[str | None] = mapped_column(String(255))
+    # Physical parent in the virtualization tree: a guest (LXC/QEMU) points at
+    # the host that runs it (a Proxmox node). Presentation-only — it is NEVER a
+    # job-targeting expansion (see app/tree.py and ansible_layer/service.py), so
+    # a node's Check/Apply never reaches its guests. SET NULL keeps guests alive
+    # when their node host is deleted (also enforced in the delete route, since
+    # SQLite cannot add an FK action via ALTER on an upgraded DB).
+    parent_server_id: Mapped[int | None] = mapped_column(
+        ForeignKey("servers.id", ondelete="SET NULL")
+    )
+    # Virtualization capability: a non-NULL value marks a host that can nest
+    # guests (proxmox node today; docker later). Drives the tree expander/badge
+    # even before any guest exists.
+    virt_kind: Mapped[str | None] = mapped_column(String(16))  # proxmox | docker
+    guest_type: Mapped[str | None] = mapped_column(String(8))  # lxc | qemu
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -79,6 +93,10 @@ class Server(Base):
     )
 
     credential: Mapped[Credential | None] = relationship()
+    parent: Mapped["Server | None"] = relationship(
+        remote_side="Server.id", back_populates="children"
+    )
+    children: Mapped[list["Server"]] = relationship(back_populates="parent")
     groups: Mapped[list["HostGroup"]] = relationship(
         secondary="host_group_members", back_populates="servers"
     )
@@ -348,6 +366,7 @@ class Discovery(Base):
     # new_host fields
     proxmox_node: Mapped[str | None] = mapped_column(String(64))
     proxmox_vmid: Mapped[str | None] = mapped_column(String(16))
+    guest_type: Mapped[str | None] = mapped_column(String(8))  # lxc | qemu
     status_text: Mapped[str | None] = mapped_column(String(32))  # running | stopped
 
     # name_change fields (the host is already known)

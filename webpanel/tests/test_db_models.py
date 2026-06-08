@@ -29,6 +29,34 @@ def test_migrate_is_idempotent():
     assert {"log_text", "server_ids", "plugin_ids", "group_ids"} <= cols
 
 
+def test_migrate_backfills_virtualization_tree():
+    """The v9 backfill links existing proxmox guests to the local node and tags
+    types/virt_kind — idempotent, only touching NULLs."""
+    from app.models import Server
+
+    with dbmod.session_scope() as s:
+        node = Server(name="pve1", connection_type="local")
+        guest = Server(name="ct-a", connection_type="proxmox", proxmox_vmid="101")
+        s.add_all([node, guest])
+
+    engine = dbmod.init_engine()
+    dbmod._migrate(engine)
+
+    with dbmod.session_scope() as s:
+        node = s.scalar(text_select_by_name(s, "pve1"))
+        guest = s.scalar(text_select_by_name(s, "ct-a"))
+        assert node.virt_kind == "proxmox"
+        assert guest.guest_type == "lxc"
+        assert guest.parent_server_id == node.id
+
+
+def text_select_by_name(session, name):
+    from app.models import Server
+    from sqlalchemy import select
+
+    return select(Server).where(Server.name == name)
+
+
 def test_wal_journal_mode_enabled():
     engine = dbmod.init_engine()
     with engine.connect() as conn:

@@ -19,6 +19,7 @@ from ..models import (
     Credential,
     Discovery,
     HostEvent,
+    HostGroup,
     HostInventory,
     HostState,
     Job,
@@ -27,6 +28,7 @@ from ..models import (
     User,
     utcnow,
 )
+from ..tree import build_host_forest
 
 DISCOVERY_STATUSES = ("pending", "ignored", "confirmed")
 from ..templating import render, templates
@@ -91,18 +93,20 @@ def list_hosts(
     db: Session = Depends(db_dependency),
     user: User = Depends(current_user),
 ):
-    # One pct list serves both rename detection and the add-host picker below.
+    # One pct/qm pass serves both rename detection and the add-host picker below.
     # Renames surface as pending name_change discoveries (not auto-applied).
     containers = proxmox.list_containers()
-    discovery.detect_proxmox_name_changes(db, containers)
+    vms = proxmox.list_vms()
+    guests = [dict(c, guest_type="lxc") for c in containers] + [
+        dict(v, guest_type="qemu") for v in vms
+    ]
+    discovery.detect_proxmox_name_changes(db, guests)
     servers = db.scalars(select(Server).order_by(Server.name)).all()
     credentials = db.scalars(select(Credential).order_by(Credential.name)).all()
     states = {st.server_id: st for st in db.scalars(select(HostState)).all()}
     # Only offer containers that aren't registered yet, so the picker (and the
-    # "All" switch) never re-adds an existing host.
-    registered = {
-        s.proxmox_vmid for s in servers if s.connection_type == "proxmox" and s.proxmox_vmid
-    }
+    # "All" switch) never re-adds an existing host. vmid is unique across CT/VM.
+    registered = {s.proxmox_vmid for s in servers if s.proxmox_vmid}
     available = [c for c in containers if c["vmid"] not in registered]
     if disc_status not in DISCOVERY_STATUSES:
         disc_status = "pending"
@@ -123,13 +127,16 @@ def list_hosts(
         and states.get(s.id)
         and states[s.id].config_status == "pending"
     )
+    live_status = _live_host_status(db)
     return render(
         request,
         "hosts.html",
         servers=servers,
+        tree=build_host_forest(db, states, live_status),
+        groups=db.scalars(select(HostGroup).order_by(HostGroup.name)).all(),
         credentials=credentials,
         states=states,
-        live_status=_live_host_status(db),
+        live_status=live_status,
         pct_containers=available,
         pct_available=proxmox.pct_path() is not None,
         discovered=discovered,
@@ -311,6 +318,10 @@ def add_host(
     credential_id: str = Form(""),
     proxmox_vmids: list[str] = Form(default=[]),
     proxmox_all: str = Form(""),
+    proxmox_vmid: str = Form(""),
+    proxmox_node: str = Form(""),
+    guest_type: str = Form(""),
+    from_discovery: str = Form(""),
     db: Session = Depends(db_dependency),
     user: User = Depends(require_admin),
 ):
@@ -322,6 +333,10 @@ def add_host(
 
     if not name.strip():
         return RedirectResponse("/hosts", status_code=303)
+    # A QEMU VM is registered over ssh but still nests under its node: carry the
+    # vmid/node link and parent it. This is the completion of a VM discovery — the
+    # admin supplies the SSH address/credential the node enumeration can't.
+    vmid = proxmox_vmid.strip()
     srv = Server(
         name=name.strip(),
         connection_type=connection_type,
@@ -329,11 +344,38 @@ def add_host(
         port=int(port) if port.strip().isdigit() else None,
         ssh_user=ssh_user.strip() or None,
         credential_id=int(credential_id) if credential_id.strip().isdigit() else None,
+        proxmox_vmid=vmid or None,
+        proxmox_node=(proxmox_node.strip() or socket.gethostname()) if vmid else None,
+        guest_type=(guest_type.strip() or "qemu") if vmid else None,
+        parent_server_id=_node_server_id(db, proxmox_node.strip() or None) if vmid else None,
         enabled=True,
     )
     db.add(srv)
+    if vmid:
+        _mark_virt_host(db, srv.parent_server_id)
+        _confirm_discovery_for_vmid(db, vmid, from_discovery)
     db.add(AuditLog(user_id=user.id, action="host.add", target=srv.name))
     return RedirectResponse("/hosts", status_code=303)
+
+
+def _confirm_discovery_for_vmid(db: Session, vmid: str, disc_id: str) -> None:
+    """Mark the pending new_host discovery for ``vmid`` confirmed once its guest
+    is registered (the VM-via-ssh completion path). Resolves by the explicit
+    discovery id when given, else by vmid."""
+    disc = None
+    if disc_id.strip().isdigit():
+        disc = db.get(Discovery, int(disc_id))
+    if disc is None:
+        disc = db.scalar(
+            select(Discovery).where(
+                Discovery.kind == "new_host",
+                Discovery.proxmox_vmid == vmid,
+                Discovery.status == "pending",
+            )
+        )
+    if disc is not None and disc.status == "pending":
+        disc.status = "confirmed"
+        disc.resolved_at = utcnow()
 
 
 def _add_proxmox_hosts(
@@ -356,42 +398,96 @@ def _add_proxmox_hosts(
 
     existing = db.scalars(select(Server)).all()
     taken_names = {s.name for s in existing}
-    taken_vmids = {s.proxmox_vmid for s in existing if s.connection_type == "proxmox"}
+    taken_vmids = {s.proxmox_vmid for s in existing if s.proxmox_vmid}
+    parent_id = _node_server_id(db)
 
     for c in selected:
-        _create_proxmox_server(
-            db, user, c["vmid"], c.get("name"), taken_names, taken_vmids
+        _create_guest_server(
+            db, user, c["vmid"], c.get("name"), taken_names, taken_vmids,
+            guest_type="lxc", parent_id=parent_id,
         )
 
     return RedirectResponse("/hosts", status_code=303)
 
 
-def _create_proxmox_server(
+def _node_server_id(db: Session, node_name: str | None = None) -> int | None:
+    """Id of the managed host that represents the Proxmox node guests run on.
+
+    Prefers an explicit virtualization host (``virt_kind`` set), matched by name
+    when ``node_name`` is given (multi-node ready); otherwise the single
+    ``local`` host (the box the panel runs on). Returns None when the node isn't
+    managed as a host — guests then render at the tree's top level.
+    """
+    if node_name:
+        srv = db.scalar(
+            select(Server).where(
+                Server.name == node_name, Server.virt_kind.is_not(None)
+            )
+        )
+        if srv is not None:
+            return srv.id
+    srv = db.scalar(
+        select(Server).where(Server.virt_kind.is_not(None)).order_by(Server.id)
+    )
+    if srv is None:
+        srv = db.scalar(
+            select(Server).where(Server.connection_type == "local").order_by(Server.id)
+        )
+    return srv.id if srv is not None else None
+
+
+def _mark_virt_host(db: Session, server_id: int | None) -> None:
+    """Flag a host as a Proxmox virtualization host once it gains a guest.
+
+    Idempotent — only sets ``virt_kind`` when still NULL, so the tree shows the
+    expander/badge even before the node's first facts run populates it.
+    """
+    if server_id is None:
+        return
+    node = db.get(Server, server_id)
+    if node is not None and node.virt_kind is None:
+        node.virt_kind = "proxmox"
+
+
+def _create_guest_server(
     db: Session,
     user: User,
     vmid: str,
     name: str | None,
     taken_names: set[str],
     taken_vmids: set[str],
+    *,
+    guest_type: str = "lxc",
+    parent_id: int | None = None,
 ) -> Server | None:
-    """Register one Proxmox container as a host, naming it after the container.
+    """Register one Proxmox guest as a host, naming it after the guest.
 
-    Falls back to ``ct{vmid}`` and a ``-{vmid}`` suffix on name collisions, and
-    skips (returns None) when ``vmid`` is missing or already registered. Mutates
+    LXC containers (``guest_type='lxc'``) are reached locally via ``pct exec`` —
+    ``connection_type='proxmox'``, enabled. QEMU VMs (``guest_type='qemu'``) have
+    no ``pct exec``; they are registered over ``ssh`` but kept **disabled** until
+    SSH connection details are supplied (the primary VM flow is the prefilled
+    Add-host modal, which sets the address up front). Both carry the
+    ``proxmox_vmid`` and a ``parent_server_id`` link to their node. Falls back to
+    ``ct{vmid}``/``vm{vmid}`` and a ``-{vmid}`` suffix on name collisions; skips
+    (returns None) when ``vmid`` is missing or already registered. Mutates
     ``taken_names``/``taken_vmids`` so a batch caller stays collision-free.
     """
     if not vmid or vmid in taken_vmids:
         return None
-    base = (name or "").strip() or f"ct{vmid}"
+    prefix = "vm" if guest_type == "qemu" else "ct"
+    base = (name or "").strip() or f"{prefix}{vmid}"
     hostname = base if base not in taken_names else f"{base}-{vmid}"
     srv = Server(
         name=hostname,
-        connection_type="proxmox",
+        connection_type="ssh" if guest_type == "qemu" else "proxmox",
         proxmox_node=socket.gethostname(),
         proxmox_vmid=vmid,
-        enabled=True,
+        guest_type=guest_type,
+        parent_server_id=parent_id,
+        enabled=guest_type != "qemu",
     )
     db.add(srv)
+    _mark_virt_host(db, parent_id)
     db.add(AuditLog(user_id=user.id, action="host.add", target=hostname))
     taken_names.add(hostname)
     taken_vmids.add(vmid)
@@ -406,6 +502,14 @@ def delete_host(
 ):
     srv = db.get(Server, server_id)
     if srv:
+        # Detach guests so they outlive their node (still linked by proxmox_node
+        # string, they resurface at the tree's top level). The ON DELETE SET NULL
+        # is declared on the model for fresh DBs, but SQLite cannot add the FK
+        # action via ALTER on an upgraded DB — so enforce it here too.
+        for child in db.scalars(
+            select(Server).where(Server.parent_server_id == server_id)
+        ).all():
+            child.parent_server_id = None
         db.add(AuditLog(user_id=user.id, action="host.delete", target=srv.name))
         db.delete(srv)
     return RedirectResponse("/hosts", status_code=303)
@@ -457,11 +561,11 @@ def confirm_discovery(
     if disc.kind == "new_host":
         existing = db.scalars(select(Server)).all()
         taken_names = {s.name for s in existing}
-        taken_vmids = {
-            s.proxmox_vmid for s in existing if s.connection_type == "proxmox"
-        }
-        _create_proxmox_server(
-            db, user, disc.proxmox_vmid, disc.name, taken_names, taken_vmids
+        taken_vmids = {s.proxmox_vmid for s in existing if s.proxmox_vmid}
+        _create_guest_server(
+            db, user, disc.proxmox_vmid, disc.name, taken_names, taken_vmids,
+            guest_type=disc.guest_type or "lxc",
+            parent_id=_node_server_id(db, disc.proxmox_node),
         )
     elif disc.kind == "name_change":
         _apply_name_change(db, user, disc)

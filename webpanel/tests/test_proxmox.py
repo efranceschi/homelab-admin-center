@@ -57,3 +57,38 @@ def test_list_containers_nonzero_rc(monkeypatch):
         lambda argv, **kw: subprocess.CompletedProcess(argv, 1, stdout="", stderr="denied"),
     )
     assert proxmox.list_containers() == []
+
+
+# `qm list` has a different column order/case than `pct list`: VMID NAME STATUS …
+_VM_HEADER = _col("VMID", 11) + _col("NAME", 21) + _col("STATUS", 11) + "MEM(MB)"
+_VM_ROW1 = _col("200", 11) + _col("web-vm", 21) + _col("running", 11) + "2048"
+_VM_ROW2 = _col("201", 11) + _col("db-vm", 21) + _col("stopped", 11) + "4096"
+_VM_SAMPLE = "\n".join([_VM_HEADER, _VM_ROW1, _VM_ROW2]) + "\n"
+
+
+def test_list_vms_parses_qm_output(monkeypatch):
+    monkeypatch.setattr(proxmox, "qm_path", lambda: "/usr/sbin/qm")
+    monkeypatch.setattr(
+        proxmox.subprocess,
+        "run",
+        lambda argv, **kw: subprocess.CompletedProcess(argv, 0, stdout=_VM_SAMPLE, stderr=""),
+    )
+    assert proxmox.list_vms() == [
+        {"vmid": "200", "name": "web-vm", "status": "running"},
+        {"vmid": "201", "name": "db-vm", "status": "stopped"},
+    ]
+
+
+def test_list_vms_empty_when_qm_absent(monkeypatch):
+    monkeypatch.setattr(proxmox, "qm_path", lambda: None)
+    assert proxmox.list_vms() == []
+
+
+def test_list_vms_handles_subprocess_error(monkeypatch):
+    monkeypatch.setattr(proxmox, "qm_path", lambda: "/usr/sbin/qm")
+
+    def boom(argv, **kwargs):
+        raise OSError("qm not executable")
+
+    monkeypatch.setattr(proxmox.subprocess, "run", boom)
+    assert proxmox.list_vms() == []

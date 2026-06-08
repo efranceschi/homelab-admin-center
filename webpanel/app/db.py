@@ -18,12 +18,20 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import config
 from .models import Base
 
-SCHEMA_VERSION = "8"
+SCHEMA_VERSION = "9"
 
 # Columns added after the initial release, keyed by table. PRAGMA table_info is
 # the source of truth, so applying these is idempotent (only missing columns are
 # added). create_all() never alters an existing table, hence this additive step.
 _ADDITIVE_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    # The virtualization tree (v9). SQLite cannot add a foreign-key action via
+    # ALTER, so parent_server_id is a plain INTEGER here; the SET NULL semantics
+    # live in the model (fresh DBs) and in the delete route (upgraded DBs).
+    "servers": [
+        ("parent_server_id", "INTEGER"),
+        ("virt_kind", "VARCHAR(16)"),
+        ("guest_type", "VARCHAR(8)"),
+    ],
     "host_state": [
         ("config_status", "VARCHAR(16)"),
         ("config_checked_at", "DATETIME"),
@@ -48,6 +56,7 @@ _ADDITIVE_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("old_name", "VARCHAR(128)"),
         ("new_name", "VARCHAR(128)"),
         ("resolved_at", "DATETIME"),
+        ("guest_type", "VARCHAR(8)"),
     ],
 }
 
@@ -129,6 +138,24 @@ def _migrate(engine: Engine) -> None:
                     conn.exec_driver_sql(
                         f"ALTER TABLE {table} ADD COLUMN {name} {type_clause}"
                     )
+        # Virtualization-tree backfill (v9). Idempotent: only ever touches rows
+        # left NULL by the additive ALTERs above. Existing proxmox guests are all
+        # LXC; the single local host is the Proxmox node that runs them.
+        conn.exec_driver_sql(
+            "UPDATE servers SET guest_type='lxc' "
+            "WHERE connection_type='proxmox' AND guest_type IS NULL"
+        )
+        conn.exec_driver_sql(
+            "UPDATE servers SET virt_kind='proxmox' "
+            "WHERE virt_kind IS NULL AND connection_type='local' "
+            "AND EXISTS (SELECT 1 FROM servers g WHERE g.connection_type='proxmox')"
+        )
+        conn.exec_driver_sql(
+            "UPDATE servers SET parent_server_id="
+            "(SELECT id FROM servers n WHERE n.connection_type='local' LIMIT 1) "
+            "WHERE connection_type='proxmox' AND parent_server_id IS NULL "
+            "AND EXISTS (SELECT 1 FROM servers n WHERE n.connection_type='local')"
+        )
         # Collapse the legacy two-axis drift vocabulary onto the single settled
         # host state (ok|pending|failed). Idempotent: live runs never re-create
         # the old values, so this only ever touches pre-upgrade rows.

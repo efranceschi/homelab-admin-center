@@ -40,23 +40,25 @@ def run_discovery() -> dict[str, int]:
     existing rows (notably ignored ones).
     """
     stats = {"found": 0, "new": 0, "pending": 0, "renamed": 0}
-    if proxmox.pct_path() is None:
+    # Scan LXC containers (pct) and QEMU VMs (qm) independently — each tagged
+    # with its guest_type. A missing binary or an empty result for one source
+    # never suppresses the other; an empty result is ambiguous (none vs. failure)
+    # so we skip that source rather than risk pruning good rows.
+    guests: list[dict[str, str]] = []
+    if proxmox.pct_path() is not None:
+        guests += [dict(c, guest_type="lxc") for c in proxmox.list_containers()]
+    if proxmox.qm_path() is not None:
+        guests += [dict(v, guest_type="qemu") for v in proxmox.list_vms()]
+    if not guests:
         return stats
-    containers = proxmox.list_containers()
-    # An empty result is ambiguous (no containers vs. pct failure); skip rather
-    # than risk pruning good rows. With no containers there is nothing to add.
-    if not containers:
-        return stats
-    stats["found"] = len(containers)
+    stats["found"] = len(guests)
 
     with session_scope() as db:
-        stats["renamed"] = len(detect_proxmox_name_changes(db, containers))
+        stats["renamed"] = len(detect_proxmox_name_changes(db, guests))
         servers = db.scalars(select(Server)).all()
-        registered_vmids = {
-            s.proxmox_vmid
-            for s in servers
-            if s.connection_type == "proxmox" and s.proxmox_vmid
-        }
+        # Any host carrying a vmid is a registered guest (LXC via pct, QEMU via
+        # ssh), so dedup on vmid alone — it is globally unique across CT and VM.
+        registered_vmids = {s.proxmox_vmid for s in servers if s.proxmox_vmid}
         node = next((s.proxmox_node for s in servers if s.proxmox_node), None)
         existing = {
             d.proxmox_vmid: d
@@ -67,7 +69,7 @@ def run_discovery() -> dict[str, int]:
             ).all()
         }
 
-        for c in containers:
+        for c in guests:
             vmid = c.get("vmid")
             if not vmid or vmid in registered_vmids:
                 continue
@@ -79,6 +81,7 @@ def run_discovery() -> dict[str, int]:
                     source="proxmox",
                     proxmox_node=node,
                     proxmox_vmid=vmid,
+                    guest_type=c.get("guest_type"),
                     name=(c.get("name") or "").strip() or None,
                     status_text=c.get("status"),
                 ))
@@ -88,6 +91,7 @@ def run_discovery() -> dict[str, int]:
                 # untouched so a decision sticks across scans.
                 row.name = (c.get("name") or "").strip() or None
                 row.status_text = c.get("status")
+                row.guest_type = c.get("guest_type")
                 row.last_seen = utcnow()
                 if node and not row.proxmox_node:
                     row.proxmox_node = node
@@ -110,24 +114,28 @@ def run_discovery() -> dict[str, int]:
 
 
 def detect_proxmox_name_changes(
-    db: Session, containers: list[dict[str, str]]
+    db: Session, guests: list[dict[str, str]]
 ) -> list[tuple[str, str]]:
-    """Surface managed Proxmox hosts whose container was renamed as discoveries.
+    """Surface managed Proxmox guests whose CT/VM was renamed as discoveries.
 
-    Matched by VMID. Unlike the old auto-sync, this never mutates ``Server.name``
-    — it emits a *pending* ``name_change`` discovery the user confirms or ignores.
-    Returns ``[(old, new)]`` for the new pending discoveries created this pass.
-    Caller owns the session/commit. No-op on an empty container list.
+    Matched by VMID against the node's ``pct list`` + ``qm list`` enumeration, so
+    it covers both LXC containers (``connection_type='proxmox'``) and QEMU VMs
+    (managed over ``ssh`` but still carrying a ``proxmox_vmid``). The node's guest
+    list is the naming authority for any host with a vmid (see
+    :func:`record_probe_hostnames`, which defers OS-hostname renames for them).
+    Unlike the old auto-sync, this never mutates ``Server.name`` — it emits a
+    *pending* ``name_change`` discovery. Returns ``[(old, new)]`` for the new
+    pending discoveries created this pass. Caller owns the session/commit.
     """
-    if not containers:
+    if not guests:
         return []
-    by_vmid = {c["vmid"]: c for c in containers if c.get("vmid")}
+    by_vmid = {c["vmid"]: c for c in guests if c.get("vmid")}
     servers = db.scalars(select(Server)).all()
     by_server = _name_change_rows_by_server(db)
     emitted: list[tuple[str, str]] = []
 
     for srv in servers:
-        if srv.connection_type != "proxmox" or not srv.proxmox_vmid:
+        if not srv.proxmox_vmid:
             continue
         c = by_vmid.get(srv.proxmox_vmid)
         if c is None:
@@ -147,8 +155,10 @@ def record_probe_hostnames(
     hostname gathered by the inventory probe (or any check/apply run). The live
     hostname is cached in ``HostState.facts_json`` for future use; for ssh/local
     hosts where it differs from ``Server.name`` a pending ``name_change`` is
-    emitted. Proxmox hosts get their facts stored but no name_change here — their
-    name authority is ``pct list`` (see :func:`detect_proxmox_name_changes`).
+    emitted. Proxmox guests get their facts stored but no name_change here — their
+    name authority is ``pct list``/``qm list`` (see
+    :func:`detect_proxmox_name_changes`). A QEMU VM is managed over ssh but still
+    carries a ``proxmox_vmid``; it is deferred to that authority too.
     Returns the count of new pending name_change discoveries created.
     """
     if not hostnames:
@@ -160,7 +170,7 @@ def record_probe_hostnames(
         if not live:
             continue
         _store_hostname_fact(db, srv.id, live)
-        if srv.connection_type not in ("ssh", "local"):
+        if srv.connection_type not in ("ssh", "local") or srv.proxmox_vmid:
             continue
         if _reconcile_name(db, srv, live, srv.connection_type, by_server.get(srv.id, [])):
             changed += 1

@@ -72,6 +72,10 @@ async def start_job(
 
     group_ids = group_ids or []
     direct_ids = list(server_ids or [])
+    # Targets = explicit hosts ∪ recursively-expanded GROUP members. The physical
+    # virtualization tree (Server.parent_server_id) is deliberately NOT expanded
+    # here: a node's Check/Apply targets only that node, never its guests (their
+    # config is independent). See app/tree.py — that link is presentation-only.
     target_ids = set(direct_ids) | expand_group_hosts(db, group_ids)
     servers = list(db.scalars(select(Server).where(Server.id.in_(target_ids))).all())
     if not servers:

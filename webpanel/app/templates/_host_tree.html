@@ -1,0 +1,118 @@
+{# Recursive renderer for the unified Hosts tree (see app/tree.py).
+
+   Each forest node becomes one <tr>; children are emitted as following sibling
+   rows tagged with data-parent (a table can't nest tbodies), and the collapse
+   JS in hosts.html toggles their `hidden` by walking the data-parent chain.
+
+   Imported `with context` so it sees csrf_token / current_role / hostname and
+   can {% include "_host_state.html" %}. Rows carry data-search / data-groups for
+   the client-side filter. #}
+{% from "_macros.html" import icon %}
+
+{% macro tree_rows(nodes) %}
+  {% for n in nodes %}
+  <tr class="tree-row tree-{{ n.kind }}{{ ' tree-synthetic' if n.synthetic }}"
+      data-node-id="{{ n.node_id }}"
+      {% if n.parent_id %}data-parent="{{ n.parent_id }}"{% endif %}
+      data-depth="{{ n.depth }}"
+      data-search="{{ n.data_search }}"
+      data-groups="{{ n.data_groups }}"
+      {% if n.parent_id %}hidden{% endif %}>
+    <td class="tree-name">
+      <span class="tree-indent" style="--d:{{ [n.depth, 6]|min }}"></span>
+      {% if n.has_children %}
+      <button type="button" class="tree-toggle" aria-expanded="false"
+              aria-label="Expand or collapse">{{ icon('chevron', 14) }}</button>
+      {% else %}<span class="tree-toggle-spacer"></span>{% endif %}
+      {% if n.kind == 'group' %}
+        <span class="tree-ico text-muted">{{ icon('box', 14) }}</span>
+        <a href="/groups/{{ n.group.id }}" class="hs-link mono" title="Edit group">{{ n.label }}</a>
+        <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">group</span>
+      {% elif n.kind == 'vhost' %}
+        <span class="tree-ico text-warning">{{ icon('server', 14) }}</span>
+        {% if n.server %}<a href="/hosts/{{ n.server.id }}" class="hs-link fw-semibold">{{ n.label }}</a>
+        {% else %}<span class="fw-semibold">{{ n.label }}</span>{% endif %}
+        <span class="badge bg-warning-subtle text-warning-emphasis ms-1"
+              title="Hosts VMs/containers — Check/Apply here does NOT touch its guests">virtualization host</span>
+      {% else %}
+        <span class="tree-ico text-muted">{{ icon('cpu', 13) }}</span>
+        <a href="/hosts/{{ n.server.id }}" class="hs-link">{{ n.label }}</a>
+        {% if n.guest_type %}<span class="badge bg-light text-dark border ms-1"
+              title="{{ 'QEMU virtual machine' if n.guest_type == 'qemu' else 'LXC container' }}">{{ 'VM' if n.guest_type == 'qemu' else 'CT' }}</span>{% endif %}
+      {% endif %}
+    </td>
+
+    {% if n.kind == 'group' %}
+      <td colspan="4" class="small text-muted">{{ n.member_summary }}</td>
+      <td></td>
+      <td class="text-end text-nowrap">
+        {% if current_role == 'admin' %}
+        <span class="act-group">
+          <a href="/groups/{{ n.group.id }}" class="act-btn act-btn-secondary"
+             title="Edit group" aria-label="Edit group {{ n.label }}">{{ icon('settings', 16) }}</a>
+          <button type="button" class="act-btn act-btn-danger"
+                  data-action="/groups/{{ n.group.id }}/delete"
+                  data-title="Delete group" data-ok="Delete"
+                  data-confirm="Delete group “{{ n.label }}”? Membership edges are removed; hosts and subgroups are not deleted."
+                  title="Delete group" aria-label="Delete group {{ n.label }}">{{ icon('trash', 16) }}</button>
+        </span>
+        {% endif %}
+      </td>
+
+    {% elif n.server is none %}
+      <td colspan="6" class="small text-muted">Node not managed as a host — guests shown for reference.</td>
+
+    {% else %}
+      {% set s = n.server %}
+      {% set is_vhost = n.kind == 'vhost' %}
+      <td><span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></td>
+      <td>
+        {% if s.proxmox_vmid %}VMID {{ s.proxmox_vmid }}
+          {% if not s.enabled %}<span class="badge bg-secondary ms-1" title="Disabled — set SSH connection details">needs SSH</span>{% endif %}
+        {% elif is_vhost or s.connection_type == 'local' %}
+          <span class="badge bg-light text-dark border" title="Proxmox node">🖳 {{ hostname }}</span>
+        {% elif s.connection_type == 'ssh' %}{{ s.ssh_user }}@{{ s.address }}{% if s.port %}:{{ s.port }}{% endif %}
+        {% else %}localhost{% endif %}
+      </td>
+      <td class="host-state-cell" data-sid="{{ s.id }}">
+        {% set st = n.state %}{% set live = n.live %}
+        {% include "_host_state.html" %}
+      </td>
+      <td>{{ s.credential.name if s.credential else '—' }}</td>
+      <td>
+        <form method="post" action="/hosts/{{ s.id }}/toggle" class="d-inline m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   {{ 'checked' if s.enabled }} onchange="this.form.submit()"
+                   title="{{ 'Enabled — switch off to disable' if s.enabled else 'Disabled — switch on to enable' }}"
+                   aria-label="{{ 'Disable host ' ~ s.name if s.enabled else 'Enable host ' ~ s.name }}">
+          </div>
+        </form>
+      </td>
+      <td class="text-end text-nowrap">
+        <span class="act-group">
+        {% if n.state and n.state.config_status == 'pending' and current_role == 'admin' %}
+        <button type="button" class="act-btn act-btn-primary"
+                data-action="/hosts/{{ s.id }}/apply"
+                data-title="Apply updates" data-ok="Apply Updates" data-ok-class="btn-warning"
+                data-confirm="Apply configuration to {% if is_vhost %}the node “{{ s.name }}” only? Its guests are NOT included.{% else %}“{{ s.name }}” to bring it up to date?{% endif %}"
+                title="Apply Updates" aria-label="Apply updates to {{ s.name }}">{{ icon('play', 16) }}</button>
+        {% endif %}
+        <button type="button" class="act-btn act-btn-secondary"
+                data-action="/hosts/{{ s.id }}/check"
+                data-title="Check host" data-ok="Run check" data-ok-class="btn-primary"
+                data-confirm="Run a drift check (--check) against {% if is_vhost %}the node “{{ s.name }}” only? Its guests (VMs/containers) are NOT included — check them individually.{% else %}“{{ s.name }}”?{% endif %}"
+                title="Check (drift check)" aria-label="Check {{ s.name }}">{{ icon('search', 16) }}</button>
+        <button type="button" class="act-btn act-btn-danger"
+                data-action="/hosts/{{ s.id }}/delete"
+                data-title="Delete host" data-ok="Delete"
+                data-confirm="Delete host “{{ s.name }}”?{% if is_vhost and n.children %} Its {{ n.children|length }} guest(s) are kept and move to the top level.{% else %} This cannot be undone.{% endif %}"
+                title="Delete host" aria-label="Delete host {{ s.name }}">{{ icon('trash', 16) }}</button>
+        </span>
+      </td>
+    {% endif %}
+  </tr>
+  {% if n.children %}{{ tree_rows(n.children) }}{% endif %}
+  {% endfor %}
+{% endmacro %}

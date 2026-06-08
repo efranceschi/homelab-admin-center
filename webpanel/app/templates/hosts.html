@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icon %}
+{% from "_host_tree.html" import tree_rows with context %}
 {% block nav_active %}hosts{% endblock %}
 {% block autorefresh %}1{% endblock %}
 {% block title %}Hosts · {{ app_name }}{% endblock %}
@@ -35,6 +36,10 @@
                 data-confirm="Apply configuration to the {{ ood_count }} host(s) with pending updates from the last check? This starts one apply job."
                 title="Apply all hosts with pending updates ({{ ood_count }})" aria-label="Apply all hosts with pending updates ({{ ood_count }})">{{ icon('play', 16) }}</button>
         {% endif %}
+        {% if current_role == 'admin' %}
+        <button class="act-btn act-btn-secondary" data-bs-toggle="modal" data-bs-target="#add-group-modal"
+                title="New group" aria-label="New group">{{ icon('box', 16) }}</button>
+        {% endif %}
         <button class="act-btn act-btn-primary" data-bs-toggle="modal" data-bs-target="#add-host-modal"
                 title="Add host" aria-label="Add host">{{ icon('plus', 16) }}</button>
       </div>
@@ -42,12 +47,7 @@
 
     {# ---- Filter toolbar -------------------------------------------------- #}
     {# Two criteria only: free-text search by name, and membership of a host
-       group. All client-side — no round-trip, filters the rendered rows. #}
-    {% set seen_gids = [] %}
-    {% set group_opts = [] %}
-    {% for s in servers %}{% for g in s.groups %}{% if g.id not in seen_gids %}
-      {% set _ = seen_gids.append(g.id) %}{% set _ = group_opts.append(g) %}
-    {% endif %}{% endfor %}{% endfor %}
+       group. All client-side — filters the tree, keeping ancestors of matches. #}
     {% if servers %}
     <div class="p-2 px-3 border-bottom bg-body-tertiary" id="host-filters">
       <div class="row g-2 align-items-center">
@@ -58,78 +58,26 @@
         <div class="col-12 col-sm-auto">
           <select id="hf-group" class="form-select form-select-sm" aria-label="Filter by group">
             <option value="">All groups</option>
-            {% for g in group_opts | sort(attribute='name') %}
+            {% for g in groups | sort(attribute='name') %}
             <option value="{{ g.id }}">{{ g.name }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-auto ms-auto d-flex align-items-center gap-2">
           <span class="text-muted small" id="hf-count"></span>
+          <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" id="hf-expand">Expand all</button>
           <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" id="hf-reset">Reset</button>
         </div>
       </div>
     </div>
     {% endif %}
 
-    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0 host-tree">
       <thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Config state</th><th>Credential</th><th>Enabled</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
-      {% for s in servers %}
-        {% set st = states.get(s.id) %}
-        <tr class="host-row"
-            data-search="{{ s.name|lower }}"
-            data-groups="{{ ' ' ~ (s.groups | map(attribute='id') | join(' ')) ~ ' ' }}">
-          <td><a href="/hosts/{{ s.id }}" class="hs-link" title="Host details & history">{{ s.name }}</a></td>
-          <td><span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></td>
-          <td>
-            {% if s.connection_type == 'proxmox' %}
-              VMID {{ s.proxmox_vmid }}
-              <span class="badge bg-light text-dark border ms-1" title="Proxmox node hosting this container">🖳 {{ s.proxmox_node or hostname }}</span>
-            {% elif s.connection_type == 'ssh' %}{{ s.ssh_user }}@{{ s.address }}{% if s.port %}:{{ s.port }}{% endif %}
-            {% else %}localhost{% endif %}
-          </td>
-          <td class="host-state-cell" data-sid="{{ s.id }}">
-            {% set live = live_status.get(s.id) %}
-            {% include "_host_state.html" %}
-          </td>
-          <td>{{ s.credential.name if s.credential else '—' }}</td>
-          <td>
-            {# Slide switch — toggles enabled on change (the endpoint flips it). #}
-            <form method="post" action="/hosts/{{ s.id }}/toggle" class="d-inline m-0">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <div class="form-check form-switch m-0">
-                <input class="form-check-input" type="checkbox" role="switch"
-                       {{ 'checked' if s.enabled }} onchange="this.form.submit()"
-                       title="{{ 'Enabled — switch off to disable' if s.enabled else 'Disabled — switch on to enable' }}"
-                       aria-label="{{ 'Disable host ' ~ s.name if s.enabled else 'Enable host ' ~ s.name }}">
-              </div>
-            </form>
-          </td>
-          <td class="text-end text-nowrap">
-            <span class="act-group">
-            {% if st and st.config_status == 'pending' and current_role == 'admin' %}
-            <button type="button" class="act-btn act-btn-primary"
-                    data-action="/hosts/{{ s.id }}/apply"
-                    data-title="Apply updates" data-ok="Apply Updates" data-ok-class="btn-warning"
-                    data-confirm="Apply configuration to “{{ s.name }}” to bring it up to date?"
-                    title="Apply Updates" aria-label="Apply updates to {{ s.name }}">{{ icon('play', 16) }}</button>
-            {% endif %}
-            <button type="button" class="act-btn act-btn-secondary"
-                    data-action="/hosts/{{ s.id }}/check"
-                    data-title="Check host" data-ok="Run check" data-ok-class="btn-primary"
-                    data-confirm="Run a drift check (--check) against “{{ s.name }}”?"
-                    title="Check (drift check)" aria-label="Check {{ s.name }}">{{ icon('search', 16) }}</button>
-            <button type="button" class="act-btn act-btn-danger"
-                    data-action="/hosts/{{ s.id }}/delete"
-                    data-title="Delete host" data-ok="Delete"
-                    data-confirm="Delete host “{{ s.name }}”? This cannot be undone."
-                    title="Delete host" aria-label="Delete host {{ s.name }}">{{ icon('trash', 16) }}</button>
-            </span>
-          </td>
-        </tr>
-      {% else %}
+      {% if tree %}{{ tree_rows(tree) }}{% else %}
         <tr><td colspan="7" class="text-muted">No hosts yet.</td></tr>
-      {% endfor %}
+      {% endif %}
         <tr id="hf-empty" hidden><td colspan="7" class="text-muted text-center py-3">
           No hosts match the current filters.</td></tr>
       </tbody>
@@ -170,7 +118,8 @@
               Host name changed: <code>{{ d.old_name }}</code> → <code>{{ d.new_name }}</code>
             {% else %}
               <span class="badge bg-primary-subtle text-primary-emphasis me-1">New host</span>
-              {{ d.name or 'ct' ~ d.proxmox_vmid }}
+              {% if d.guest_type == 'qemu' %}<span class="badge bg-light text-dark border me-1" title="QEMU virtual machine">VM</span>{% elif d.guest_type %}<span class="badge bg-light text-dark border me-1" title="LXC container">CT</span>{% endif %}
+              {{ d.name or ('vm' if d.guest_type == 'qemu' else 'ct') ~ d.proxmox_vmid }}
               {% if d.proxmox_vmid %}<span class="text-muted small">· VMID {{ d.proxmox_vmid }}</span>{% endif %}
               {% if d.status_text %}<span class="badge conn-proxmox ms-1">{{ d.status_text }}</span>{% endif %}
             {% endif %}
@@ -181,11 +130,23 @@
           <td class="text-end">
             {% if d.status == 'pending' and current_role == 'admin' %}
             <span class="act-group">
+              {% if d.kind == 'new_host' and d.guest_type == 'qemu' %}
+              {# A VM has no `pct exec`; confirming opens the Add-host SSH modal
+                 prefilled so the admin supplies the address/credential. #}
+              <button type="button" class="act-btn act-btn-primary vm-confirm"
+                      data-bs-toggle="modal" data-bs-target="#add-host-modal"
+                      data-vm-name="{{ d.name or 'vm' ~ d.proxmox_vmid }}"
+                      data-vm-vmid="{{ d.proxmox_vmid }}"
+                      data-vm-node="{{ d.proxmox_node or '' }}"
+                      data-vm-disc="{{ d.id }}"
+                      title="Connect VM over SSH" aria-label="Connect VM over SSH">{{ icon('check', 16) }}</button>
+              {% else %}
               <button type="button" class="act-btn act-btn-primary"
                       data-action="/hosts/discovered/{{ d.id }}/confirm"
                       data-title="Confirm discovery" data-ok="Confirm" data-ok-class="btn-primary"
                       data-confirm="{% if d.kind == 'name_change' %}Rename “{{ d.old_name }}” to “{{ d.new_name }}” in Hosts?{% else %}Register “{{ d.name or 'ct' ~ d.proxmox_vmid }}”{% if d.proxmox_vmid %} (VMID {{ d.proxmox_vmid }}){% endif %} as a managed host?{% endif %}"
                       title="Confirm" aria-label="Confirm discovery">{{ icon('check', 16) }}</button>
+              {% endif %}
               <button type="button" class="act-btn act-btn-danger"
                       data-action="/hosts/discovered/{{ d.id }}/ignore"
                       data-title="Ignore discovery" data-ok="Ignore"
@@ -210,8 +171,14 @@
   <div class="modal-dialog modal-dialog-centered">
     <form class="modal-content" method="post" action="/hosts">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {# Set by the "connect VM" flow (Discovered tab) so an ssh host registered
+         for a QEMU VM nests under its node and resolves the discovery. #}
+      <input type="hidden" name="proxmox_vmid" id="vm-vmid" value="">
+      <input type="hidden" name="proxmox_node" id="vm-node" value="">
+      <input type="hidden" name="guest_type" id="vm-guest-type" value="">
+      <input type="hidden" name="from_discovery" id="vm-disc" value="">
       <div class="modal-header">
-        <h5 class="modal-title">Add host</h5>
+        <h5 class="modal-title" id="add-host-title">Add host</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
@@ -279,11 +246,40 @@
   </div>
 </div>
 
+{% if current_role == 'admin' %}
+{# ---- Add group modal ---------------------------------------------------- #}
+<div class="modal fade" id="add-group-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="/groups">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="modal-header">
+        <h5 class="modal-title">New group</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2"><label class="form-label">Name</label>
+          <input class="form-control form-control-sm mono" name="name" required></div>
+        <div class="mb-2"><label class="form-label">Description <span class="text-muted small">(optional)</span></label>
+          <input class="form-control form-control-sm" name="description"></div>
+        <p class="text-muted small mb-0">A virtual element to group hosts for run
+          targeting. Add hosts and subgroups on the next screen.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary">Create group</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <script>
   // Add host modal: show only the active connection-type fields. Proxmox adds
   // one host per selected container (or all), so the single Name field is hidden
   // and not required there; the "All containers" switch disables the per-row
-  // checkboxes; submit is blocked if nothing is selected.
+  // checkboxes; submit is blocked if nothing is selected. The Discovered tab's
+  // "connect VM" button opens this modal prefilled (ssh + hidden vmid/node) so a
+  // QEMU VM registers with its node link once SSH details are supplied.
   (function () {
     const modal = document.getElementById('add-host-modal');
     if (!modal) return;
@@ -292,6 +288,13 @@
     const nameGroup = document.getElementById('host-name-group');
     const nameInp = document.getElementById('host-name');
     const allCb = document.getElementById('pct-all');
+    const title = document.getElementById('add-host-title');
+    const vm = {
+      vmid: document.getElementById('vm-vmid'),
+      node: document.getElementById('vm-node'),
+      type: document.getElementById('vm-guest-type'),
+      disc: document.getElementById('vm-disc'),
+    };
     const cbs = () => Array.from(modal.querySelectorAll('.pct-cb'));
     const isProxmox = () => typeSel.value === 'proxmox';
 
@@ -304,6 +307,27 @@
       nameInp.required = !isProxmox();
     }
     typeSel.addEventListener('change', syncType);
+
+    function clearVm() {
+      vm.vmid.value = ''; vm.node.value = ''; vm.type.value = ''; vm.disc.value = '';
+      if (title) title.textContent = 'Add host';
+    }
+
+    modal.addEventListener('show.bs.modal', function (ev) {
+      const btn = ev.relatedTarget;
+      if (btn && btn.classList.contains('vm-confirm')) {
+        typeSel.value = 'ssh';
+        nameInp.value = btn.dataset.vmName || '';
+        vm.vmid.value = btn.dataset.vmVmid || '';
+        vm.node.value = btn.dataset.vmNode || '';
+        vm.type.value = 'qemu';
+        vm.disc.value = btn.dataset.vmDisc || '';
+        if (title) title.textContent = 'Connect VM over SSH';
+      } else {
+        clearVm();
+      }
+      syncType();
+    });
     modal.addEventListener('shown.bs.modal', syncType);
 
     if (allCb) allCb.addEventListener('change', () =>
@@ -321,39 +345,113 @@
     });
   })();
 
-  // Host filters: client-side, AND-combined across name search and group
-  // membership. Updates the match counter and an empty-state row; no round-trip.
+  // Tree collapse/expand. Children are sibling <tr>s tagged data-parent; toggling
+  // a node shows/hides its descendants, respecting each child's own open state.
+  // Open state is persisted per pathname so it survives the auto-refresh reload.
+  let restoreCollapse = function () {};
+  (function () {
+    const tbody = document.querySelector('#tab-hosts tbody');
+    if (!tbody) return;
+    const KEY = 'hac:tree:' + location.pathname;
+    let open = {};
+    try { open = JSON.parse(sessionStorage.getItem(KEY) || '{}'); } catch (e) {}
+    const allRows = () => Array.from(tbody.querySelectorAll('tr.tree-row'));
+    const childRows = (id) => allRows().filter(r => r.dataset.parent === id);
+
+    function applyOpen(id, isOpen) {
+      childRows(id).forEach(row => {
+        row.hidden = !isOpen;
+        const cid = row.dataset.nodeId;
+        const childOpen = isOpen && !!open[cid];
+        const btn = row.querySelector('.tree-toggle');
+        if (btn) { btn.setAttribute('aria-expanded', childOpen ? 'true' : 'false'); }
+        row.classList.toggle('is-open', childOpen);
+        applyOpen(cid, childOpen);
+      });
+    }
+    restoreCollapse = function () {
+      allRows().filter(r => !r.dataset.parent).forEach(r => {
+        const id = r.dataset.nodeId, isOpen = !!open[id];
+        const btn = r.querySelector('.tree-toggle');
+        if (btn) { btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false'); }
+        r.classList.toggle('is-open', isOpen);
+        applyOpen(id, isOpen);
+      });
+    };
+    tbody.addEventListener('click', function (ev) {
+      const btn = ev.target.closest('.tree-toggle');
+      if (!btn) return;
+      const row = btn.closest('tr'); const id = row.dataset.nodeId;
+      const next = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', next ? 'true' : 'false');
+      row.classList.toggle('is-open', next);
+      if (next) open[id] = 1; else delete open[id];
+      try { sessionStorage.setItem(KEY, JSON.stringify(open)); } catch (e) {}
+      applyOpen(id, next);
+    });
+    window.__hacExpandAll = function () {
+      allRows().forEach(r => {
+        r.hidden = false;
+        const btn = r.querySelector('.tree-toggle');
+        if (btn) { open[r.dataset.nodeId] = 1; btn.setAttribute('aria-expanded', 'true'); r.classList.add('is-open'); }
+      });
+      try { sessionStorage.setItem(KEY, JSON.stringify(open)); } catch (e) {}
+    };
+    restoreCollapse();
+  })();
+
+  // Tree-aware filter: match host/guest/group rows by name and group membership,
+  // then force every ancestor of a match visible so the path to it stays open.
+  // Clearing the filter restores the saved collapse state.
   (function () {
     const wrap = document.getElementById('host-filters');
     if (!wrap) return;
-    const rows = Array.from(document.querySelectorAll('#tab-hosts tr.host-row'));
+    const tbody = document.querySelector('#tab-hosts tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr.tree-row'));
+    const byId = {}; rows.forEach(r => byId[r.dataset.nodeId] = r);
     const search = document.getElementById('hf-search');
     const group = document.getElementById('hf-group');
     const empty = document.getElementById('hf-empty');
     const count = document.getElementById('hf-count');
+    const totalHosts = rows.filter(r => r.querySelector('.host-state-cell')).length;
 
     function apply() {
       const q = search.value.trim().toLowerCase();
       const gid = group.value;
-      let shown = 0;
-      rows.forEach(row => {
-        const ok =
-          (!q || row.dataset.search.includes(q)) &&
-          (!gid || row.dataset.groups.includes(' ' + gid + ' '));
-        row.hidden = !ok;
-        if (ok) shown++;
+      if (!q && !gid) {
+        rows.forEach(r => r.hidden = false);
+        restoreCollapse();
+        if (empty) empty.hidden = true;
+        if (count) count.textContent = '';
+        return;
+      }
+      const show = new Set();
+      rows.forEach(r => {
+        const nameOk = !q || (r.dataset.search || '').includes(q);
+        const groupOk = !gid || (r.dataset.groups || '').includes(' ' + gid + ' ');
+        if (nameOk && groupOk) {
+          show.add(r.dataset.nodeId);
+          let p = r.dataset.parent;
+          while (p && byId[p] && !show.has(p)) { show.add(p); p = byId[p].dataset.parent; }
+        }
       });
-      if (empty) empty.hidden = shown !== 0;
-      if (count) count.textContent = shown + ' of ' + rows.length;
+      let shown = 0;
+      rows.forEach(r => {
+        const vis = show.has(r.dataset.nodeId);
+        r.hidden = !vis;
+        if (vis && r.querySelector('.host-state-cell')) shown++;
+      });
+      if (empty) empty.hidden = show.size !== 0;
+      if (count) count.textContent = shown + ' of ' + totalHosts;
     }
 
     wrap.addEventListener('input', apply);
     wrap.addEventListener('change', apply);
     document.getElementById('hf-reset').addEventListener('click', () => {
-      search.value = '';
-      group.value = '';
-      apply();
+      search.value = ''; group.value = ''; apply();
     });
+    const exp = document.getElementById('hf-expand');
+    if (exp) exp.addEventListener('click', () => { if (window.__hacExpandAll) window.__hacExpandAll(); });
     apply();
   })();
 

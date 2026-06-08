@@ -20,22 +20,10 @@ router = APIRouter(prefix="/groups")
 
 
 @router.get("")
-def list_groups(
-    request: Request,
-    db: Session = Depends(db_dependency),
-    user: User = Depends(current_user),
-):
-    groups = db.scalars(select(HostGroup).order_by(HostGroup.name)).all()
-    items = [
-        {
-            "g": g,
-            "hosts": len(g.servers),
-            "subgroups": len(g.children),
-            "effective": len(expand_group_hosts(db, [g.id])),
-        }
-        for g in groups
-    ]
-    return render(request, "groups.html", items=items)
+def list_groups(request: Request):
+    # The group listing is now folded into the unified Hosts tree; keep this
+    # path as a redirect for old bookmarks / Referer-based returns.
+    return RedirectResponse("/hosts", status_code=303)
 
 
 @router.post("", dependencies=[Depends(verify_csrf)])
@@ -67,7 +55,7 @@ def edit_group(
 ):
     g = db.get(HostGroup, group_id)
     if g is None:
-        return RedirectResponse("/groups", status_code=303)
+        return RedirectResponse("/hosts", status_code=303)
     servers = db.scalars(select(Server).order_by(Server.name)).all()
     member_ids = {s.id for s in g.servers}
     child_ids = {c.id for c in g.children}
@@ -101,7 +89,7 @@ async def update_group(
 ):
     g = db.get(HostGroup, group_id)
     if g is None:
-        return RedirectResponse("/groups", status_code=303)
+        return RedirectResponse("/hosts", status_code=303)
     form = await request.form()
     name = (form.get("name") or "").strip()
     if name:
@@ -153,4 +141,4 @@ def delete_group(
         ).delete()
         db.add(AuditLog(user_id=user.id, action="group.delete", target=g.name))
         db.delete(g)
-    return RedirectResponse("/groups", status_code=303)
+    return RedirectResponse("/hosts", status_code=303)
