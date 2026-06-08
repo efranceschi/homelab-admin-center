@@ -8,6 +8,12 @@
 # (POST /settings/system/restart -> system.request_restart -> os._exit(0), then
 # systemd Restart=always respawns it fresh). No sudo required.
 #
+# Simpler no-credentials alternative (immediate when idle, otherwise drains
+# running jobs first): send SIGHUP to the main process —
+#   kill -HUP "$(cat run_dirs/hac.pid)"
+# See docs/sighup-restart.md. This script remains useful for the immediate,
+# no-drain HTTP restart and for waiting until the panel is back up.
+#
 # Credentials (an admin account) resolve in this order:
 #   1. HAC_USER / HAC_PASS environment variables.
 #   2. ~/.netrc entry for the HAC_URL host (machine/login/password).

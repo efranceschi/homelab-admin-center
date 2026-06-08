@@ -35,17 +35,26 @@ old code until restarted. Whenever you change anything the running panel loads
 (Python under `webpanel/app/`, templates, static assets, plugin definitions),
 restart the panel immediately so the change takes effect.
 
-Use the bundled script — it drives the panel's own self-restart endpoint and
-needs **no sudo** (the process exits itself and systemd respawns it):
+Preferred — send **SIGHUP** to the panel's main process. It needs **no sudo and
+no credentials**: the panel gracefully drains running jobs, then exits and
+systemd (`Restart=always`) respawns it fresh.
 
 ```bash
-HAC_USER=admin HAC_PASS=… ./webpanel/restart.sh
+kill -HUP "$(cat /opt/hac/webpanel/run_dirs/hac.pid)"
 ```
 
-Credentials resolve from `HAC_USER`/`HAC_PASS` or a `~/.netrc` entry for the
-host; override the URL with `HAC_URL` (default `http://127.0.0.1:8910`). The
-script waits for the panel to come back. Privileged fallback when you have root:
-`sudo systemctl restart hac`.
+With no jobs running this restarts in a few seconds. If a job is in flight the
+drain waits up to `restart_drain_timeout_seconds` (default 300s; `0` = wait
+indefinitely); send a **second** SIGHUP to force an immediate restart. See
+`webpanel/docs/sighup-restart.md`.
+
+Alternatives:
+
+- `HAC_USER=admin HAC_PASS=… ./webpanel/restart.sh` — drives the HTTP
+  self-restart endpoint (immediate, no drain) and waits for the panel to come
+  back. Needs an admin account: `HAC_USER`/`HAC_PASS` or a `~/.netrc` entry;
+  override the URL with `HAC_URL` (default `http://127.0.0.1:8910`).
+- `sudo systemctl restart hac` — privileged fallback when you have root.
 
 Verify after restarting (e.g. `systemctl is-active hac`, or check the live routes
 via `curl -s http://127.0.0.1:8910/openapi.json`).

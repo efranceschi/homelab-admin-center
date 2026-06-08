@@ -283,7 +283,10 @@ Roadmap items for the panel itself (not Ansible plugins).
 log in with username/password and carry a per-session CSRF token (see
 `webpanel/restart.sh`, which scrapes `/login` then posts to
 `/settings/system/restart`). That is brittle and couples scripts to the HTML/CSRF
-flow.
+flow. (The *restart* case specifically already has a credential-free path —
+`kill -HUP "$(cat webpanel/run_dirs/hac.pid)"`, see
+`webpanel/docs/sighup-restart.md` — so this motivation now applies to the
+remaining programmatic actions, not restart.)
 
 **Idea.** Add issuable API keys (admin-managed, scoped, revocable) accepted via
 an `Authorization`/`X-API-Key` header, bypassing the session+CSRF dance for

@@ -139,7 +139,10 @@ it never edits `ansible.cfg`, `run.sh`, `site.yml`, the roles, the connection pl
   (start/stop/restart). It shares the run flock so scheduled and manual runs never overlap.
 - **Self-update / self-restart** — Settings has **Update & restart** (git pull + reinstall
   deps + restart) and **Restart** buttons. These work when the panel runs as the `hac`
-  systemd service (`Restart=always`).
+  systemd service (`Restart=always`). From a shell, `kill -HUP "$(cat
+  webpanel/run_dirs/hac.pid)"` triggers the same restart with no sudo or
+  credentials — it gracefully drains running jobs first (a second SIGHUP forces
+  it immediately). See `webpanel/docs/sighup-restart.md`.
 
 ### Install & run
 
