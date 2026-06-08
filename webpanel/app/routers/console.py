@@ -132,7 +132,9 @@ async def _bridge(websocket: WebSocket, session: ConsoleSession) -> None:
     """
     loop = asyncio.get_running_loop()
     try:
-        master_fd, proc = spawn_pty(session.argv, cwd=str(session.run_dir))
+        # Neutral cwd: the SSH key (if any) is referenced by absolute path, and a
+        # root shell starting in the ephemeral run dir would read oddly.
+        master_fd, proc = spawn_pty(session.argv, cwd="/")
     except Exception as exc:  # spawn failure (bad binary, perms, …)
         try:
             await websocket.send_bytes(

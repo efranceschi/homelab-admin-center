@@ -111,8 +111,8 @@ def _server_console_argv(srv: Server, run_dir: Path) -> list[str]:
         # escalate via the one shell /etc/sudoers.d/hac whitelists (`/bin/sh`,
         # NOPASSWD), then exec bash for a nicer prompt, falling back to sh.
         if os.geteuid() == 0:
-            return ["bash", "-l"]
-        return proxmox._sudo_argv("/bin/sh", "-c", "exec /bin/bash -l 2>/dev/null || exec /bin/sh")
+            return ["/bin/bash", "-i"]
+        return proxmox._sudo_argv("/bin/sh", "-c", "exec /bin/bash -i || exec /bin/sh -i")
     if ct == "ssh":
         return _ssh_argv(srv, run_dir)
     if ct == "proxmox":
@@ -151,10 +151,12 @@ def build_console_argv(
         host = db.get(Server, c.host_server_id)
         if host is None:
             raise ConsoleError("docker host not found")
-        # Prefer bash inside the container, fall back to sh; -it for a TTY.
+        # Prefer an interactive bash inside the container, fall back to sh; -it
+        # allocates the container-side TTY. (No `2>/dev/null`: redirecting stderr
+        # off the tty would make bash decide it is non-interactive — no prompt.)
         inner = [
             "docker", "exec", "-it", c.container_id,
-            "sh", "-c", "exec /bin/bash 2>/dev/null || exec /bin/sh",
+            "sh", "-c", "exec /bin/bash -i || exec /bin/sh -i",
         ]
         return _wrap_interactive(host, inner, run_dir), (c.name or c.container_id[:12])
 
@@ -175,11 +177,20 @@ def spawn_pty(
 ) -> tuple[int, subprocess.Popen]:
     """Spawn `argv` attached to a fresh PTY; return ``(master_fd, proc)``.
 
-    ``start_new_session=True`` gives the child its own session/pgid so a
-    ``killpg`` on teardown reaps the whole tree. The master fd is non-blocking
-    so the event-loop reader never stalls.
+    The child starts its own session (``setsid``) AND makes the slave its
+    controlling terminal (``TIOCSCTTY``). The controlling tty is essential:
+    without it ``pct enter`` / ``lxc-attach`` and job-control shells get no
+    prompt and never process input. ``setsid`` also gives the child its own
+    pgid so a ``killpg`` on teardown reaps the whole tree. The master fd is
+    non-blocking so the event-loop reader never stalls.
     """
     master_fd, slave_fd = pty.openpty()
+
+    def _setup_child() -> None:
+        # New session, then claim the slave (fd 0) as the controlling terminal.
+        os.setsid()
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
     try:
         set_winsize(master_fd, rows, cols)
         env = dict(os.environ)
@@ -187,7 +198,7 @@ def spawn_pty(
         proc = subprocess.Popen(
             argv,
             stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
-            start_new_session=True, close_fds=True, cwd=cwd, env=env,
+            preexec_fn=_setup_child, close_fds=True, cwd=cwd, env=env,
         )
     finally:
         os.close(slave_fd)
