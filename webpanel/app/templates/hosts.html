@@ -73,12 +73,12 @@
     {% endif %}
 
     <div class="table-responsive"><table class="table table-sm align-middle mb-0 host-tree">
-      <thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Config state</th><th>Credential</th><th>Enabled</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Target</th><th>Config state</th><th>Credential</th><th>Enabled</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
       {% if tree %}{{ tree_rows(tree) }}{% else %}
-        <tr><td colspan="7" class="text-muted">No hosts yet.</td></tr>
+        <tr><td colspan="6" class="text-muted">No hosts yet.</td></tr>
       {% endif %}
-        <tr id="hf-empty" hidden><td colspan="7" class="text-muted text-center py-3">
+        <tr id="hf-empty" hidden><td colspan="6" class="text-muted text-center py-3">
           No hosts match the current filters.</td></tr>
       </tbody>
     </table></div>

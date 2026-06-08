@@ -60,7 +60,7 @@
     </td>
 
     {% if n.kind == 'group' %}
-      <td colspan="4" class="small text-muted">{{ n.member_summary }}</td>
+      <td colspan="3" class="small text-muted">{{ n.member_summary }}</td>
       <td></td>
       <td class="text-end text-nowrap">
         {% if current_role == 'admin' %}
@@ -78,7 +78,6 @@
 
     {% elif n.kind == 'stack' %}
       {% set _all = n.stack_total and n.stack_running == n.stack_total %}
-      <td><span class="text-info" title="Docker Compose stack" aria-label="stack">{{ icon('layers', 14) }}</span></td>
       <td colspan="4" class="small">
         <span class="badge {{ 'bg-success-subtle text-success-emphasis' if _all else 'bg-secondary-subtle text-secondary-emphasis' }}"
               title="Containers running / total in this stack">{{ n.stack_running }}/{{ n.stack_total }} running</span>
@@ -112,7 +111,6 @@
 
     {% elif n.kind == 'docker' %}
       {% set d = n.docker %}
-      <td><span title="Docker container" aria-label="docker">{{ brand('docker', 14) }}</span></td>
       <td class="small mono text-truncate" style="max-width:22ch" title="{{ d.image }}">{{ d.image or '—' }}</td>
       <td>
         {% set _ok = d.state == 'running' %}
@@ -153,12 +151,11 @@
       <td class="small text-muted text-truncate text-end" style="max-width:18ch" title="{{ d.ports }}">{{ d.ports }}</td>
 
     {% elif n.server is none %}
-      <td colspan="6" class="small text-muted">Node not managed as a host — guests shown for reference.</td>
+      <td colspan="5" class="small text-muted">Node not managed as a host — guests shown for reference.</td>
 
     {% else %}
       {% set s = n.server %}
       {% set is_vhost = n.kind == 'vhost' %}
-      <td><span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></td>
       <td>
         {% if s.proxmox_vmid %}VMID {{ s.proxmox_vmid }}
           {% if n.power and not is_vhost %}<span class="badge {{ 'bg-success-subtle text-success-emphasis' if n.power == 'running' else 'bg-secondary-subtle text-secondary-emphasis' }} ms-1" title="Power state">{{ n.power }}</span>{% endif %}
@@ -224,11 +221,15 @@
                   title="Start" aria-label="Start {{ s.name }}">{{ icon('play', 16) }}</button>
           {% endif %}
         {% elif current_role == 'admin' and is_vhost and n.children %}
+          {# Start all only when at least one guest is not running; uses a
+             distinct icon from the per-guest Start (play) to avoid confusion. #}
+          {% if n.children | selectattr('power') | rejectattr('power', 'equalto', 'running') | list %}
           <button type="button" class="act-btn act-btn-primary"
                   data-action="/power/node/{{ s.id }}/start"
                   data-title="Start all guests" data-ok="Start all" data-ok-class="btn-success"
                   data-confirm="Start ALL {{ n.children|length }} guest(s)/container(s) on node “{{ s.name }}”?"
-                  title="Start all guests" aria-label="Start all guests on {{ s.name }}">{{ icon('play', 16) }}</button>
+                  title="Start all guests" aria-label="Start all guests on {{ s.name }}">{{ icon('layers', 16) }}</button>
+          {% endif %}
           <button type="button" class="act-btn act-btn-warning"
                   data-action="/power/node/{{ s.id }}/stop" data-force-allow="1"
                   data-title="Stop all guests" data-ok="Stop all" data-ok-class="btn-warning"
