@@ -157,6 +157,15 @@ def _migrate(engine: Engine) -> None:
             conn.exec_driver_sql(
                 "UPDATE discoveries SET status='pending' WHERE status IS NULL"
             )
+            if "dismissed" in cols:
+                # The unified Discovery model dropped the legacy `dismissed`
+                # bool (its meaning now lives in `status`), but the physical
+                # column was left behind NOT NULL with no default — so every
+                # new insert that omits it raised IntegrityError. Drop it now
+                # that status has been backfilled from it. SQLite >=3.35.
+                conn.exec_driver_sql(
+                    "ALTER TABLE discoveries DROP COLUMN dismissed"
+                )
             conn.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_discoveries_source_vmid "
                 "ON discoveries (source, proxmox_vmid)"
