@@ -31,8 +31,8 @@ def qm_path() -> str | None:
 def _sudo_argv(binary: str, *args: str) -> list[str]:
     """Build a command line, prefixing ``sudo -n`` when not running as root.
 
-    ``pct``/``qm`` require root; the panel runs as the unprivileged ``hac`` user
-    and is granted the commands via /etc/sudoers.d/hac. The CLI/root path is
+    ``pct``/``qm`` require root; the panel runs as the unprivileged ``hack`` user
+    and is granted the commands via /etc/sudoers.d/hack. The CLI/root path is
     unchanged.
     """
     base = ["sudo", "-n", binary] if os.geteuid() != 0 else [binary]

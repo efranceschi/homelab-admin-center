@@ -377,7 +377,7 @@
   (function () {
     const tbody = document.querySelector('#tab-hosts tbody');
     if (!tbody) return;
-    const KEY = 'hac:tree:' + location.pathname;
+    const KEY = 'hack:tree:' + location.pathname;
     let open = {};
     try { open = JSON.parse(sessionStorage.getItem(KEY) || '{}'); } catch (e) {}
     const allRows = () => Array.from(tbody.querySelectorAll('tr.tree-row'));

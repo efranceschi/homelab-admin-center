@@ -291,7 +291,7 @@ document.addEventListener('submit', function (ev) {
   if (!window.bootstrap) return;
   const tabs = Array.from(document.querySelectorAll('.nav-tabs [data-bs-toggle="tab"]'));
   if (!tabs.length) return;
-  const key = 'hac:tab:' + location.pathname;
+  const key = 'hack:tab:' + location.pathname;
   const btnFor = (target) =>
     target && document.querySelector('.nav-tabs [data-bs-toggle="tab"][data-bs-target="' + target + '"]');
 

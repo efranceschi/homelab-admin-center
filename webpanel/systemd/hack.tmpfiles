@@ -1,8 +1,8 @@
-# /etc/tmpfiles.d/hac.conf — installed by webpanel/install-service.sh.
+# /etc/tmpfiles.d/hack.conf — installed by webpanel/install-service.sh.
 #
 # The advisory run lock lives on tmpfs (/run) and is shared by the panel, the
 # scheduler child, and the CLI run.sh so their runs never overlap. /run is wiped
-# on every boot, so pre-create the lock file owned by `hac` (the service user)
+# on every boot, so pre-create the lock file owned by `hack` (the service user)
 # here — otherwise the unprivileged panel could not create it under root-owned
 # /run, and the panel + a root-run CLI would not share the same lock file.
-f /run/hac.lock 0644 hac hac -
+f /run/hack.lock 0644 hack hack -

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Entrypoint for the lxc-ansible web control panel.
+# Entrypoint for the Homelab Admin and Control Kernel web control panel.
 # Creates a dedicated venv (separate from the Ansible .venv so the cron run is
 # never affected), installs the web requirements, and launches Uvicorn.
 #

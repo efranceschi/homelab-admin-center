@@ -1,4 +1,4 @@
-# Central tooling configuration for HomeLab Admin Center (HAC).
+# Central tooling configuration for Homelab Admin and Control Kernel (H.A.C.K.).
 # Covers ruff (lint+format), pytest/coverage, mypy and bandit. The package is
 # not distributed via this file; it only configures the dev/CI toolchain.
 

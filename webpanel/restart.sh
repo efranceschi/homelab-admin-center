@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Restart the HAC web panel without root.
+# Restart the H.A.C.K. web panel without root.
 #
-# The `hac` service runs uvicorn without --reload, so code changes only apply
-# after a restart. `systemctl restart hac` needs privileges this shell may lack;
+# The `hack` service runs uvicorn without --reload, so code changes only apply
+# after a restart. `systemctl restart hack` needs privileges this shell may lack;
 # instead this drives the panel's own self-restart endpoint
 # (POST /settings/system/restart -> system.request_restart -> os._exit(0), then
 # systemd Restart=always respawns it fresh). No sudo required.
 #
 # Simpler no-credentials alternative (immediate when idle, otherwise drains
 # running jobs first): send SIGHUP to the main process —
-#   kill -HUP "$(cat run_dirs/hac.pid)"
+#   kill -HUP "$(cat run_dirs/hack.pid)"
 # See docs/sighup-restart.md. This script remains useful for the immediate,
 # no-drain HTTP restart and for waiting until the panel is back up.
 #
 # Credentials (an admin account) resolve in this order:
-#   1. HAC_USER / HAC_PASS environment variables.
-#   2. ~/.netrc entry for the HAC_URL host (machine/login/password).
+#   1. HACK_USER / HACK_PASS environment variables.
+#   2. ~/.netrc entry for the HACK_URL host (machine/login/password).
 # Other config:
-#   HAC_URL   panel base URL (default http://127.0.0.1:8910)
+#   HACK_URL   panel base URL (default http://127.0.0.1:8910)
 # ============================================================================
 set -euo pipefail
 
-BASE="${HAC_URL:-http://127.0.0.1:8910}"
+BASE="${HACK_URL:-http://127.0.0.1:8910}"
 BASE="${BASE%/}"  # strip trailing slash
 NETRC="${HOME}/.netrc"
 
@@ -30,8 +30,8 @@ die() { echo "restart.sh: $*" >&2; exit 1; }
 command -v curl >/dev/null || die "curl not found"
 
 # --- resolve credentials ----------------------------------------------------
-USER="${HAC_USER:-}"
-PASS="${HAC_PASS:-}"
+USER="${HACK_USER:-}"
+PASS="${HACK_PASS:-}"
 if [[ -z "${USER}" || -z "${PASS}" ]] && [[ -f "${NETRC}" ]]; then
     host="${BASE#*://}"; host="${host%%/*}"; host="${host%%:*}"
     # Read login/password for the matching `machine` block; tokens may span lines.
@@ -51,7 +51,7 @@ if [[ -z "${USER}" || -z "${PASS}" ]] && [[ -f "${NETRC}" ]]; then
     fi
 fi
 [[ -n "${USER}" && -n "${PASS}" ]] || \
-    die "no credentials: set HAC_USER/HAC_PASS or add a ~/.netrc entry for the host"
+    die "no credentials: set HACK_USER/HACK_PASS or add a ~/.netrc entry for the host"
 
 JAR="$(mktemp)"
 trap 'rm -f "${JAR}"' EXIT

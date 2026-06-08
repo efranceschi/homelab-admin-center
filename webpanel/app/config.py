@@ -9,14 +9,14 @@ import os
 from pathlib import Path
 
 # Branding — three canonical forms used throughout the project:
-#   APP_NAME  : long display name  -> "HomeLab Admin Center"
-#   APP_SHORT : short display name  -> "HAC"
-#   APP_SLUG  : technical id / sigla (systemd unit, paths) -> "hac"
-APP_NAME = "HomeLab Admin Center"
-APP_SHORT = "HAC"
-APP_SLUG = "hac"
+#   APP_NAME  : long display name  -> "Homelab Admin and Control Kernel"
+#   APP_SHORT : short display name  -> "H.A.C.K." (dotted; display only)
+#   APP_SLUG  : technical id / sigla (systemd unit, paths) -> "hack"
+APP_NAME = "Homelab Admin and Control Kernel"
+APP_SHORT = "H.A.C.K."
+APP_SLUG = "hack"
 APP_VERSION = "0.1.0"
-APP_REPO_URL = "https://github.com/efranceschi/homelab-admin-center"
+APP_REPO_URL = "https://github.com/efranceschi/hack"
 
 # webpanel/app/config.py -> webpanel/app -> webpanel -> <ANSIBLE_ROOT>
 APP_DIR = Path(__file__).resolve().parent
@@ -31,12 +31,12 @@ INVENTORY_DIR = ANSIBLE_ROOT / "inventory"
 WEBPANEL_PLAYBOOK = ANSIBLE_ROOT / "playbooks" / "webpanel.yml"
 ANSIBLE_PLAYBOOK_BIN = ANSIBLE_ROOT / ".venv" / "bin" / "ansible-playbook"
 VAULT_PASSWORD_FILE = Path(
-    os.environ.get("PANEL_VAULT_PASSWORD_FILE", "/etc/hac/vault-pass")
+    os.environ.get("PANEL_VAULT_PASSWORD_FILE", "/etc/hack/vault-pass")
 )
 
 # Shared advisory lock — the SAME file run.sh uses, so panel runs and the daily
 # cron run can never overlap on the same containers.
-RUN_LOCK_FILE = Path(os.environ.get("PANEL_RUN_LOCK", "/run/hac.lock"))
+RUN_LOCK_FILE = Path(os.environ.get("PANEL_RUN_LOCK", "/run/hack.lock"))
 
 # Panel's own plugin directory (auto-discovered at startup).
 PLUGINS_DIR = PANEL_DIR / "plugins"
@@ -45,24 +45,24 @@ PLUGINS_DIR = PANEL_DIR / "plugins"
 RUN_DIRS = PANEL_DIR / "run_dirs"
 
 # PID of the main panel process, written at startup / removed on clean shutdown.
-# Enables a sudo-free, HTTP-free graceful restart: `kill -HUP $(cat hac.pid)`.
+# Enables a sudo-free, HTTP-free graceful restart: `kill -HUP $(cat hack.pid)`.
 # Mirrors the scheduler's scheduler.pid (same RUN_DIRS, created by ensure_*dirs).
-HAC_PIDFILE = RUN_DIRS / "hac.pid"
+HACK_PIDFILE = RUN_DIRS / "hack.pid"
 
 # Persistent state. Defaults live under /var/lib so the DB is outside the git
 # tree; falls back to the panel dir for unprivileged/dev runs.
-_DEFAULT_STATE_DIR = "/var/lib/hac"
+_DEFAULT_STATE_DIR = "/var/lib/hack"
 STATE_DIR = Path(os.environ.get("PANEL_STATE_DIR", _DEFAULT_STATE_DIR))
 DB_PATH = Path(os.environ.get("PANEL_DB_PATH", str(STATE_DIR / "panel.sqlite3")))
 
 # Master key for secrets-at-rest (Fernet). Mirrors the vault-pass trust model.
 MASTER_KEY_PATH = Path(
-    os.environ.get("PANEL_MASTER_KEY", "/etc/hac/panel.key")
+    os.environ.get("PANEL_MASTER_KEY", "/etc/hack/panel.key")
 )
 
 # Session signing secret (persisted next to the master key).
 SESSION_SECRET_PATH = Path(
-    os.environ.get("PANEL_SESSION_SECRET", "/etc/hac/panel.session")
+    os.environ.get("PANEL_SESSION_SECRET", "/etc/hack/panel.session")
 )
 
 # Log retention for job logs (mirrors run.sh keeping the 30 most recent).

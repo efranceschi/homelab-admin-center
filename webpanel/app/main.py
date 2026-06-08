@@ -1,4 +1,4 @@
-"""FastAPI application factory for HomeLab Admin Center (hac)."""
+"""FastAPI application factory for Homelab Admin and Control Kernel (hack)."""
 from __future__ import annotations
 
 import asyncio
@@ -71,10 +71,10 @@ def _ensure_default_schedules(db) -> None:
 
 
 def _write_pidfile() -> None:
-    """Record the main process PID so operators can `kill -HUP $(cat hac.pid)`.
+    """Record the main process PID so operators can `kill -HUP $(cat hack.pid)`.
     Mirrors the scheduler's pidfile handling (same RUN_DIRS)."""
     config.RUN_DIRS.mkdir(parents=True, exist_ok=True)
-    config.HAC_PIDFILE.write_text(str(os.getpid()))
+    config.HACK_PIDFILE.write_text(str(os.getpid()))
 
 
 def _install_sighup_handler() -> None:
@@ -116,7 +116,7 @@ async def lifespan(app: FastAPI):
     init_db()
     warnings = registry.load()
     for w in warnings:
-        print(f"[hac] plugin warning: {w}")
+        print(f"[hack] plugin warning: {w}")
     with session_scope() as db:
         sync_to_db(db)
         _ensure_default_schedules(db)
@@ -151,7 +151,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    config.HAC_PIDFILE.unlink(missing_ok=True)
+    config.HACK_PIDFILE.unlink(missing_ok=True)
     scheduler_manager.stop()
 
 
@@ -161,7 +161,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         SessionMiddleware,
         secret_key=crypto.get_session_secret(),
-        session_cookie="hac_session",
+        session_cookie="hack_session",
         same_site="lax",
         https_only=config.HTTPS_ONLY,  # Secure cookie when behind a TLS proxy (PANEL_HTTPS_ONLY=1)
     )

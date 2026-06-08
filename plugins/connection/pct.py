@@ -17,7 +17,7 @@ DOCUMENTATION = """
     description:
         - Uses the Proxmox `pct` utility to run commands and transfer files
           into LXC containers, with no SSH required.
-    author: lxc-ansible
+    author: hack
     options:
       remote_addr:
         description: Container VMID (comes from ansible_host in the pct.py inventory).
@@ -60,8 +60,8 @@ class Connection(ConnectionBase):
         ``sudo -n`` when not running as root.
 
         ``pct`` needs root; under the web panel this plugin runs as the
-        unprivileged ``hac`` user, which is granted ``pct`` via
-        /etc/sudoers.d/hac. Run directly as root (the CLI path) it is unchanged.
+        unprivileged ``hack`` user, which is granted ``pct`` via
+        /etc/sudoers.d/hack. Run directly as root (the CLI path) it is unchanged.
         """
         import shutil
 

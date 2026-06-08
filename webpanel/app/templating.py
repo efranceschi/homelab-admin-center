@@ -25,9 +25,9 @@ def _static_version() -> str:
     return str(int(newest)) or config.APP_VERSION
 
 templates = Jinja2Templates(directory=str(config.APP_DIR / "templates"))
-templates.env.globals["app_name"] = config.APP_NAME       # long: HomeLab Admin Center
-templates.env.globals["app_short"] = config.APP_SHORT     # short: HAC
-templates.env.globals["app_slug"] = config.APP_SLUG       # sigla: hac
+templates.env.globals["app_name"] = config.APP_NAME       # long: Homelab Admin and Control Kernel
+templates.env.globals["app_short"] = config.APP_SHORT     # short: H.A.C.K.
+templates.env.globals["app_slug"] = config.APP_SLUG       # sigla: hack
 templates.env.globals["app_version"] = config.APP_VERSION
 templates.env.globals["app_repo_url"] = config.APP_REPO_URL
 # Navbar brand: a user-customisable instance name + the node's hostname badge.

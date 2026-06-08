@@ -24,9 +24,9 @@ def _load(name: str, relpath: str):
 
 @pytest.fixture(scope="session")
 def inventory_module():
-    return _load("hac_inventory_pct", "inventory/pct.py")
+    return _load("hack_inventory_pct", "inventory/pct.py")
 
 
 @pytest.fixture(scope="session")
 def pct_connection_module():
-    return _load("hac_connection_pct", "plugins/connection/pct.py")
+    return _load("hack_connection_pct", "plugins/connection/pct.py")

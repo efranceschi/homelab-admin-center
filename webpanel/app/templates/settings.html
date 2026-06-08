@@ -110,7 +110,7 @@
                  min="0" max="3600" step="10" value="{{ restart_drain_timeout_seconds }}">
           <div class="form-text">On <code>SIGHUP</code> the panel drains running jobs
             before restarting, waiting up to this long. <code>0</code> = wait
-            indefinitely. Run <code>kill -HUP $(cat run_dirs/hac.pid)</code>.</div>
+            indefinitely. Run <code>kill -HUP $(cat run_dirs/hack.pid)</code>.</div>
         </div>
       </div>
       <button class="btn btn-primary btn-sm mt-3"><span class="btn-ico">{{ icon('check', 14) }}</span> Save</button>
@@ -181,10 +181,10 @@
         {% if scheduler.running %}<span class="badge bg-success">running (pid {{ scheduler.pid }})</span>
         {% else %}<span class="badge bg-secondary">stopped</span>{% endif %}<br>
         Running as:
-        {% if service_user.is_root %}<span class="badge bg-warning text-dark" title="Running as root — consider the unprivileged hac user">{{ service_user.name }} (uid {{ service_user.uid }})</span>
+        {% if service_user.is_root %}<span class="badge bg-warning text-dark" title="Running as root — consider the unprivileged hack user">{{ service_user.name }} (uid {{ service_user.uid }})</span>
         {% else %}<span class="badge bg-success">{{ service_user.name }} (uid {{ service_user.uid }})</span>{% endif %}<br>
         Service manager:
-        {% if under_systemd %}<span class="badge bg-info text-dark">systemd (hac)</span>
+        {% if under_systemd %}<span class="badge bg-info text-dark">systemd (hack)</span>
         {% else %}<span class="badge bg-warning text-dark">not under systemd</span>{% endif %}
       </p>
       <div class="act-group justify-content-start">
@@ -201,7 +201,7 @@
       </div>
       {% if not under_systemd %}
       <div class="form-text mt-2">Update/Restart work best when running as the
-        <code>hac</code> systemd service.</div>
+        <code>hack</code> systemd service.</div>
       {% endif %}
     </div></div>
   </div>

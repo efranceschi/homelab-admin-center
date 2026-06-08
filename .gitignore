@@ -15,7 +15,7 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# The `hac` service user's home IS this checkout (/opt/hac), so its login
+# The `hack` service user's home IS this checkout (/opt/hack), so its login
 # dotfiles and tool caches land here — keep them out of git.
 .bashrc
 .profile

@@ -16,12 +16,12 @@ def test_env_overrides_applied():
 
 
 def test_envflag_parsing(monkeypatch):
-    monkeypatch.setenv("HAC_TEST_FLAG", "yes")
-    assert config._envflag("HAC_TEST_FLAG") is True
-    monkeypatch.setenv("HAC_TEST_FLAG", "off")
-    assert config._envflag("HAC_TEST_FLAG") is False
-    monkeypatch.delenv("HAC_TEST_FLAG", raising=False)
-    assert config._envflag("HAC_TEST_FLAG", default=True) is True
+    monkeypatch.setenv("HACK_TEST_FLAG", "yes")
+    assert config._envflag("HACK_TEST_FLAG") is True
+    monkeypatch.setenv("HACK_TEST_FLAG", "off")
+    assert config._envflag("HACK_TEST_FLAG") is False
+    monkeypatch.delenv("HACK_TEST_FLAG", raising=False)
+    assert config._envflag("HACK_TEST_FLAG", default=True) is True
 
 
 def test_ensure_runtime_dirs_creates_paths():

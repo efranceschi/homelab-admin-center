@@ -108,7 +108,7 @@ def _server_console_argv(srv: Server, run_dir: Path) -> list[str]:
     """Interactive shell argv for a managed Server."""
     ct = srv.connection_type
     if ct == "local":
-        # Unprivileged shell on the Proxmox node as the panel's own user (`hac`):
+        # Unprivileged shell on the Proxmox node as the panel's own user (`hack`):
         # NO sudo — least privilege, and the panel can signal it directly. The
         # admin escalates with `sudo pct …` inside if needed. (Falls back to sh
         # only if bash is somehow absent, which it never is on a PVE node.)
@@ -211,7 +211,7 @@ def reap(session: "ConsoleSession") -> None:
 
     **Close the master fd FIRST.** The LXC/docker shells run as *root* in a
     separate session (via ``sudo``'s ``use_pty`` / ``pct enter``), so the
-    unprivileged ``hac`` panel cannot signal them, and interactive bash ignores
+    unprivileged ``hack`` panel cannot signal them, and interactive bash ignores
     ``SIGTERM``. Closing the master delivers ``SIGHUP`` down the tty chain
     (through sudo's own pty) and the root shell exits — the only reliable kill.
     Then escalate ``killpg`` on the parts we *can* signal (sudo/pct/ssh) as a

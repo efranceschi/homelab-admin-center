@@ -2,7 +2,7 @@
 
 Secrets (SSH private keys, Proxmox API tokens, the Ansible vault password) are
 encrypted with Fernet (AES-128-CBC + HMAC-SHA256) before being stored in SQLite.
-The master key is a host-local file (``/etc/hac/panel.key``, mode 0600),
+The master key is a host-local file (``/etc/hack/panel.key``, mode 0600),
 auto-generated on first run and excluded from git — mirroring the existing
 ``vault-pass`` trust model. This protects DB backups/exports and accidental
 commits; it is not a defense against a root compromise of the host itself.

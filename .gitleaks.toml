@@ -3,7 +3,7 @@
 useDefault = true
 
 [allowlist]
-description = "HAC allowlist: example templates, the encrypted vault, and tests."
+description = "H.A.C.K. allowlist: example templates, the encrypted vault, and tests."
 paths = [
     '''.*\.example\.ya?ml$''',
     '''inventory/group_vars/all/vault\.yml$''',   # ansible-vault ciphertext, not a leak

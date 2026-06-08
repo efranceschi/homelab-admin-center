@@ -2,7 +2,7 @@
 
 Design constraints (see plan):
   - Single Uvicorn worker -> this in-memory registry is authoritative.
-  - One job at a time, guarded by the SAME flock file (/run/hac.lock),
+  - One job at a time, guarded by the SAME flock file (/run/hack.lock),
     shared with the scheduler child process so runs never overlap.
   - Live logs streamed to the browser via SSE (an asyncio.Queue per subscriber).
 """
@@ -442,14 +442,14 @@ class JobManager:
         second call while already draining escalates to an immediate forced
         restart — the operator's "don't wait" escape hatch (spec §4.4)."""
         if self._draining:
-            print("[hac] second SIGHUP while draining — forcing immediate restart",
+            print("[hack] second SIGHUP while draining — forcing immediate restart",
                   flush=True)
             self._force_restart()
             return
         self._draining = True
         active = self.active_job_ids()
         print(
-            f"[hac] SIGHUP: draining for graceful restart "
+            f"[hack] SIGHUP: draining for graceful restart "
             f"(running={len(active)} queued={len(self._queue)})",
             flush=True,
         )
@@ -468,14 +468,14 @@ class JobManager:
             if deadline is not None and asyncio.get_event_loop().time() >= deadline:
                 aborted = self.active_job_ids()
                 print(
-                    f"[hac] drain timeout after {timeout}s — forcing restart, "
+                    f"[hack] drain timeout after {timeout}s — forcing restart, "
                     f"aborting job ids {aborted} (will be marked failed on startup)",
                     flush=True,
                 )
                 self._force_restart()
                 return
             await asyncio.sleep(_DRAIN_POLL_SECONDS)
-        print("[hac] drain complete — restarting", flush=True)
+        print("[hack] drain complete — restarting", flush=True)
         self._force_restart()
 
     @staticmethod

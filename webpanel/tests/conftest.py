@@ -1,9 +1,9 @@
-"""Shared pytest fixtures for the HAC web-panel test suite.
+"""Shared pytest fixtures for the H.A.C.K. web-panel test suite.
 
 The panel derives every writable path from ``PANEL_*`` env vars (see
 ``app/config.py``). We point them all at a throwaway temp dir **before** the app
 package is imported, so each test run boots on an isolated SQLite DB + fresh key
-files and never touches /etc/hac or /var/lib/hac. ``PANEL_DISABLE_SCHEDULER``
+files and never touches /etc/hack or /var/lib/hack. ``PANEL_DISABLE_SCHEDULER``
 stops the startup hook from spawning the scheduler child process.
 """
 
@@ -20,7 +20,7 @@ import pytest
 # Environment isolation — MUST run before importing app.config (module-level
 # reads of these vars happen at import time).
 # --------------------------------------------------------------------------- #
-_TMP = Path(tempfile.mkdtemp(prefix="hac-tests-"))
+_TMP = Path(tempfile.mkdtemp(prefix="hack-tests-"))
 os.environ.update(
     {
         "PANEL_STATE_DIR": str(_TMP / "state"),
@@ -28,7 +28,7 @@ os.environ.update(
         "PANEL_MASTER_KEY": str(_TMP / "etc" / "panel.key"),
         "PANEL_SESSION_SECRET": str(_TMP / "etc" / "panel.session"),
         "PANEL_VAULT_PASSWORD_FILE": str(_TMP / "etc" / "vault-pass"),
-        "PANEL_RUN_LOCK": str(_TMP / "run" / "hac.lock"),
+        "PANEL_RUN_LOCK": str(_TMP / "run" / "hack.lock"),
         "PANEL_DISABLE_SCHEDULER": "1",
     }
 )

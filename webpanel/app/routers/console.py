@@ -9,7 +9,7 @@ Three endpoints:
   bytes both ways until either side closes.
 
 Auth on the WebSocket is enforced inline (the HTTP ``Depends`` guards raise HTTP
-responses / redirects that don't apply to a socket upgrade): the ``hac_session``
+responses / redirects that don't apply to a socket upgrade): the ``hack_session``
 cookie rides the same-origin handshake and ``SessionMiddleware`` populates
 ``websocket.session``.
 """

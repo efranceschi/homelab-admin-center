@@ -13,12 +13,12 @@ permissions:
   contents: read
 
 env:
-  PANEL_STATE_DIR: /tmp/hac/state
-  PANEL_DB_PATH: /tmp/hac/state/panel.sqlite3
-  PANEL_MASTER_KEY: /tmp/hac/etc/panel.key
-  PANEL_SESSION_SECRET: /tmp/hac/etc/panel.session
-  PANEL_VAULT_PASSWORD_FILE: /tmp/hac/etc/vault-pass
-  PANEL_RUN_LOCK: /tmp/hac/run/hac.lock
+  PANEL_STATE_DIR: /tmp/hack/state
+  PANEL_DB_PATH: /tmp/hack/state/panel.sqlite3
+  PANEL_MASTER_KEY: /tmp/hack/etc/panel.key
+  PANEL_SESSION_SECRET: /tmp/hack/etc/panel.session
+  PANEL_VAULT_PASSWORD_FILE: /tmp/hack/etc/vault-pass
+  PANEL_RUN_LOCK: /tmp/hack/run/hack.lock
   PANEL_DISABLE_SCHEDULER: "1"
 
 jobs:
@@ -38,7 +38,7 @@ jobs:
         run: pip install -r webpanel/requirements-web.txt "schemathesis<4"
 
       - name: Prepare runtime dirs
-        run: mkdir -p /tmp/hac/state /tmp/hac/etc /tmp/hac/run
+        run: mkdir -p /tmp/hack/state /tmp/hack/etc /tmp/hack/run
 
       - name: Boot the panel
         working-directory: webpanel

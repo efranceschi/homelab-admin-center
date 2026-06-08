@@ -65,7 +65,7 @@ def test_session_cookie_flags(client, csrf, admin_creds):
         follow_redirects=False,
     )
     set_cookie = resp.headers.get("set-cookie", "").lower()
-    assert "hac_session=" in set_cookie
+    assert "hack_session=" in set_cookie
     assert "httponly" in set_cookie
     assert "samesite=lax" in set_cookie
     # PANEL_HTTPS_ONLY is unset in tests, so the cookie must not be Secure-only.

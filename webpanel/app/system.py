@@ -1,7 +1,7 @@
 """Self-update and self-restart for the running panel.
 
-Designed for the app running as the ``hac`` systemd service: restart is a
-detached ``systemctl restart hac``. When not under systemd (e.g. a foreground
+Designed for the app running as the ``hack`` systemd service: restart is a
+detached ``systemctl restart hack``. When not under systemd (e.g. a foreground
 dev run), it falls back to re-executing the current process.
 """
 from __future__ import annotations
