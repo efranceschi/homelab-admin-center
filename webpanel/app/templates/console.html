@@ -1,9 +1,7 @@
 <!doctype html>
-{# Standalone interactive console page (NOT the app shell). Loaded by the popup
-   the Hosts tree opens; it connects a WebSocket to /console/ws/{token} and wires
-   xterm.js to it. A "Detach" button moves the LIVE terminal node into a separate
-   OS window (movable/minimizable) without reconnecting — the WebSocket keeps
-   running in this controller tab, so closing this tab ends the session. #}
+{# Standalone interactive console page (NOT the app shell). Loaded by the tab the
+   Hosts tree opens; it connects a WebSocket to /console/ws/{token} and wires
+   xterm.js to it. Closing the tab ends the session. #}
 <html lang="en" data-theme="dark" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
@@ -26,19 +24,8 @@
     }
     .con-bar .dot { width: 9px; height: 9px; border-radius: 50%; background: #888; flex: 0 0 auto; }
     .con-bar .dot.ok { background: #2ecc71; } .con-bar .dot.off { background: #e74c3c; }
-    .con-bar .sp { flex: 1 1 auto; }
-    .con-bar button {
-      font: 600 12px 'JetBrains Mono', monospace; color: #c8d0e0;
-      background: #1b2230; border: 1px solid #2b3550;
-      border-radius: 5px; padding: .25rem .6rem; cursor: pointer;
-    }
-    .con-bar button:hover { background: #243049; }
     .con-host { flex: 1 1 auto; min-height: 0; background: #000; }
     #term { width: 100%; height: 100%; }
-    .con-note { display: none; padding: 2rem; color: #8a93a8;
-      font: 14px 'JetBrains Mono', monospace; }
-    body.detached .con-host { display: none; }
-    body.detached .con-note { display: block; }
   </style>
 </head>
 <body>
@@ -46,21 +33,13 @@
     <div class="con-bar">
       <span class="dot" id="dot"></span>
       <span id="bar-title">{{ title }}</span>
-      <span class="sp"></span>
-      <button type="button" id="detach-btn" title="Open this session in a separate window">Detach to window</button>
-      <button type="button" id="reattach-btn" hidden title="Bring the session back into this tab">Re-attach</button>
     </div>
     <div class="con-host"><div id="term"></div></div>
-    <div class="con-note">
-      Session detached to a separate window.<br>
-      Keep this tab open — closing it ends the console session.
-    </div>
   </div>
 
   <script>
   (function () {
     const TOKEN = {{ token | tojson }};
-    const DOC_TITLE = {{ title | tojson }};
     const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://')
                 + location.host + '/console/ws/' + TOKEN;
 
@@ -97,53 +76,10 @@
     };
     term.onData((d) => { if (ws.readyState === WebSocket.OPEN) ws.send(enc.encode(d)); });
 
-    // Refit on any size change of the terminal's current container.
+    // Refit on any size change of the terminal's container.
     const ro = new ResizeObserver(() => { try { fit.fit(); } catch (e) {} sendResize(); });
-    ro.observe(document.getElementById('term').parentElement);
+    ro.observe(host.parentElement);
 
-    // --- Detach: move the live terminal node into a separate OS window. The
-    // WebSocket and xterm instance stay in THIS tab (the controller); the popup
-    // just hosts the DOM. Closing this tab ends the session.
-    const detachBtn = document.getElementById('detach-btn');
-    const reattachBtn = document.getElementById('reattach-btn');
-    const originalHost = document.querySelector('.con-host');
-    let win = null, winPoll = null;
-
-    function reattach() {
-      if (win && !win.closed) { try { win.close(); } catch (e) {} }
-      win = null;
-      if (winPoll) { clearInterval(winPoll); winPoll = null; }
-      originalHost.appendChild(host);
-      document.body.classList.remove('detached');
-      detachBtn.hidden = false; reattachBtn.hidden = true;
-      ro.observe(host.parentElement);
-      setTimeout(() => { try { fit.fit(); } catch (e) {} sendResize(); term.focus(); }, 40);
-    }
-
-    function detach() {
-      win = window.open('', 'hac-console-' + TOKEN, 'width=920,height=560');
-      if (!win) { alert('Popup blocked — allow popups to detach the console.'); return; }
-      win.document.write('<!doctype html><html data-theme="dark"><head><meta charset="utf-8">'
-        + '<title>' + DOC_TITLE + ' · console</title></head>'
-        + '<body style="margin:0;background:#000;height:100vh;overflow:hidden"></body></html>');
-      win.document.close();
-      document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
-        win.document.head.appendChild(l.cloneNode(true));
-      });
-      win.document.body.appendChild(host);   // adopt the live terminal node
-      document.body.classList.add('detached');
-      detachBtn.hidden = true; reattachBtn.hidden = false;
-      ro.observe(host.parentElement);
-      win.addEventListener('resize', () => { try { fit.fit(); } catch (e) {} sendResize(); });
-      setTimeout(() => { try { fit.fit(); } catch (e) {} sendResize(); term.focus(); }, 60);
-      // If the detached window is closed, end the session.
-      winPoll = setInterval(() => {
-        if (win && win.closed) { clearInterval(winPoll); winPoll = null; try { ws.close(); } catch (e) {} }
-      }, 800);
-    }
-
-    detachBtn.addEventListener('click', detach);
-    reattachBtn.addEventListener('click', reattach);
     window.addEventListener('beforeunload', () => { try { ws.close(); } catch (e) {} });
   })();
   </script>
