@@ -125,6 +125,12 @@
         <span class="act-group">
           {% if d.state == 'running' %}
           <button type="button" class="act-btn act-btn-secondary"
+                  data-console-kind="docker" data-console-id="{{ d.id }}"
+                  data-console-title="{{ d.name or d.container_id[:12] }}"
+                  title="Open console" aria-label="Open console for {{ d.name or d.container_id[:12] }}">{{ icon('terminal', 16) }}</button>
+          {% endif %}
+          {% if d.state == 'running' %}
+          <button type="button" class="act-btn act-btn-secondary"
                   data-action="/power/docker/{{ d.id }}/restart" data-force-allow="1"
                   data-title="Restart container" data-ok="Restart" data-ok-class="btn-warning"
                   data-confirm="Restart container “{{ d.name or d.container_id[:12] }}”? Graceful by default."
@@ -180,6 +186,15 @@
       </td>
       <td class="text-end text-nowrap">
         <span class="act-group">
+        {# Console: any host the panel can reach with a shell (not synthetic
+           groups). LXC via `pct enter`, local/ssh directly; QEMU only when it is
+           reachable as an SSH host. #}
+        {% if current_role == 'admin' and (s.connection_type in ('local', 'ssh') or (s.connection_type == 'proxmox' and n.guest_type == 'lxc')) %}
+        <button type="button" class="act-btn act-btn-secondary"
+                data-console-kind="server" data-console-id="{{ s.id }}"
+                data-console-title="{{ s.name }}"
+                title="Open console" aria-label="Open console for {{ s.name }}">{{ icon('terminal', 16) }}</button>
+        {% endif %}
         {# Power controls: per-guest for a controllable LXC/QEMU; bulk for a node. #}
         {% if current_role == 'admin' and not is_vhost and n.guest_type %}
           {% if n.power == 'running' %}

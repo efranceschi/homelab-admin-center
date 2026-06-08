@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import signal
 from contextlib import asynccontextmanager
 
@@ -13,6 +14,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import config, crypto
 from .auth import install_redirect_handler
+from .console import CONSOLE_RUN_ROOT
+from .console import manager as console_manager
 from .db import init_db, session_scope
 from .jobs import PanelRestarting
 from .jobs import manager as job_manager
@@ -24,6 +27,7 @@ from .routers import credentials as credentials_router
 from .routers import groups as groups_router
 from .routers import jobs as jobs_router
 from .routers import plugins as plugins_router
+from .routers import console as console_router
 from .routers import power as power_router
 from .routers import schedules as schedules_router
 from .routers import settings as settings_router
@@ -73,15 +77,25 @@ def _install_sighup_handler() -> None:
     this handler — a HUP to a child can never trigger an app restart loop."""
     loop = asyncio.get_event_loop()
     try:
-        loop.add_signal_handler(signal.SIGHUP, job_manager.begin_drain)
+        loop.add_signal_handler(signal.SIGHUP, _graceful_restart)
     except (NotImplementedError, RuntimeError):
         # add_signal_handler is unavailable (non-Unix / no running loop): fall
         # back to signal.signal, scheduling the drain back onto the loop so no
         # heavy work runs inside the signal handler itself.
         def _handler(_sig, _frm):
-            loop.call_soon_threadsafe(job_manager.begin_drain)
+            loop.call_soon_threadsafe(_graceful_restart)
 
         signal.signal(signal.SIGHUP, _handler)
+
+
+def _graceful_restart() -> None:
+    """SIGHUP handler body (runs on the loop). Consoles are interactive and
+    unbounded, so they NEVER participate in the job drain: kill them immediately
+    (each child's death tears down its WebSocket bridge), then drain jobs as
+    before. A second SIGHUP still reaches ``job_manager.begin_drain`` to force an
+    immediate restart."""
+    console_manager.begin_drain()
+    job_manager.begin_drain()
 
 
 @asynccontextmanager
@@ -110,6 +124,9 @@ async def lifespan(app: FastAPI):
             .where(Job.status.in_(("running", "queued")))
             .values(status="failed", pid=None)
         )
+    # Console sessions are purely in-memory; after a restart none survive, so any
+    # leftover per-session run dir is stale key material — sweep the whole tree.
+    shutil.rmtree(CONSOLE_RUN_ROOT, ignore_errors=True)
     # Scheduling is owned by the app via a separate child process (no cron).
     # Suppressed under tests/DAST (PANEL_DISABLE_SCHEDULER=1) so booting the
     # app never spawns the scheduler child.
@@ -167,6 +184,7 @@ def create_app() -> FastAPI:
     app.include_router(groups_router.router)
     app.include_router(plugins_router.router)
     app.include_router(jobs_router.router)
+    app.include_router(console_router.router)
     app.include_router(power_router.router)
     app.include_router(schedules_router.router)
     app.include_router(settings_router.router)

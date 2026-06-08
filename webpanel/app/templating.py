@@ -17,7 +17,7 @@ def _static_version() -> str:
     import os
 
     newest = 0.0
-    for sub in ("css/panel.css", "js/sse.js"):
+    for sub in ("css/panel.css", "js/sse.js", "js/xterm.js", "css/xterm.css"):
         try:
             newest = max(newest, (config.APP_DIR / "static" / sub).stat().st_mtime)
         except OSError:

@@ -198,6 +198,44 @@ document.addEventListener('click', function (ev) {
   bootstrap.Modal.getOrCreateInstance(document.getElementById('confirm-modal')).show();
 });
 
+// Web console launcher. Open the window synchronously (so the popup blocker sees
+// a user gesture), mint a one-time token, then point the window at the console
+// page. The token is single-use and short-lived, so it is safe in the URL.
+document.addEventListener('click', async function (ev) {
+  const t = ev.target.closest('[data-console-kind]');
+  if (!t) return;
+  ev.preventDefault();
+  const csrfInput = document.querySelector('#confirm-form input[name="csrf_token"]');
+  const csrf = csrfInput ? csrfInput.value : '';
+  const win = window.open('', '_blank');
+  try {
+    const r = await fetch('/console/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-Token': csrf,
+        'X-Requested-With': 'fetch',
+      },
+      body: new URLSearchParams({
+        target_kind: t.dataset.consoleKind,
+        target_id: t.dataset.consoleId,
+      }),
+    });
+    if (!r.ok) {
+      let msg = 'Failed to open console.';
+      try { msg = (await r.json()).detail || msg; } catch (e) { /* non-JSON */ }
+      if (win) win.close();
+      alert(msg);
+      return;
+    }
+    const d = await r.json();
+    if (win) win.location = d.url; else window.open(d.url, '_blank');
+  } catch (e) {
+    if (win) win.close();
+    alert('Failed to open console: ' + e);
+  }
+});
+
 // Immediate feedback on submit. The check/apply/delete endpoints await job
 // startup before redirecting, so the trigger would otherwise sit inert for a
 // beat and read as frozen. Swap the submitting button's content for a spinner
