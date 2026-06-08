@@ -101,6 +101,8 @@ def list_hosts(
         dict(v, guest_type="qemu") for v in vms
     ]
     discovery.detect_proxmox_name_changes(db, guests)
+    # Power state (running/stopped) per VMID, to drive the tree's power buttons.
+    power_by_vmid = {g["vmid"]: g["status"] for g in guests if g.get("vmid")}
     servers = db.scalars(select(Server).order_by(Server.name)).all()
     credentials = db.scalars(select(Credential).order_by(Credential.name)).all()
     states = {st.server_id: st for st in db.scalars(select(HostState)).all()}
@@ -132,7 +134,7 @@ def list_hosts(
         request,
         "hosts.html",
         servers=servers,
-        tree=build_host_forest(db, states, live_status),
+        tree=build_host_forest(db, states, live_status, power_by_vmid),
         groups=db.scalars(select(HostGroup).order_by(HostGroup.name)).all(),
         credentials=credentials,
         states=states,

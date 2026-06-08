@@ -30,10 +30,12 @@ from .models import DockerContainer, HostGroup, Server
 class _Ctx:
     """Pre-computed lookups shared across the recursive builders (one pass)."""
 
-    def __init__(self, db: Session, states: dict, live: dict) -> None:
+    def __init__(self, db: Session, states: dict, live: dict, power: dict) -> None:
         self.db = db
         self.states = states or {}
         self.live = live or {}
+        # Proxmox power state (running/stopped/…) keyed by VMID, from `pct/qm list`.
+        self.power = power or {}
         self.servers = list(db.scalars(select(Server)).all())
         self.children_map: dict[int, list[Server]] = {}
         for s in self.servers:
@@ -73,7 +75,7 @@ def _server_node(
             proj = (c.compose_project or "").strip()
             (stacks.setdefault(proj, []) if proj else standalone).append(c)
         for proj in sorted(stacks, key=str.lower):
-            children.append(_docker_stack_node(proj, stacks[proj], depth + 1, node_id))
+            children.append(_docker_stack_node(proj, stacks[proj], depth + 1, node_id, s.id))
         for c in sorted(standalone, key=lambda x: (x.name or x.container_id).lower()):
             children.append(_docker_node(c, depth + 1, node_id))
     # A virtualization host shows the expander even before a guest exists; inside
@@ -91,6 +93,8 @@ def _server_node(
         "live": ctx.live.get(s.id),
         "virt_kind": s.virt_kind,
         "guest_type": s.guest_type,
+        # Power state (running/stopped) for a controllable guest, by VMID.
+        "power": ctx.power.get(s.proxmox_vmid) if s.proxmox_vmid else None,
         "is_guest": s.parent_server_id is not None,
         "synthetic": False,
         "data_search": s.name.lower(),
@@ -100,7 +104,8 @@ def _server_node(
 
 
 def _docker_stack_node(
-    project: str, containers: list[DockerContainer], depth: int, parent_node_id: str
+    project: str, containers: list[DockerContainer], depth: int, parent_node_id: str,
+    host_server_id: int,
 ) -> dict:
     """A grouping band for a Docker Compose stack (compose project).
 
@@ -121,6 +126,8 @@ def _docker_stack_node(
         "has_children": True,
         "label": project,
         "server": None,
+        "project": project,
+        "host_server_id": host_server_id,
         "stack_total": len(containers),
         "stack_running": sum(1 for c in containers if c.state == "running"),
         "virt_kind": None,
@@ -210,9 +217,18 @@ def _group_node(
     }
 
 
-def build_host_forest(db: Session, states: dict | None = None, live: dict | None = None) -> list[dict]:
-    """Return the top-level forest: physical hosts first, then group overlays."""
-    ctx = _Ctx(db, states or {}, live or {})
+def build_host_forest(
+    db: Session,
+    states: dict | None = None,
+    live: dict | None = None,
+    power: dict | None = None,
+) -> list[dict]:
+    """Return the top-level forest: physical hosts first, then group overlays.
+
+    ``power`` maps a Proxmox VMID -> power state (running/stopped) from
+    ``pct/qm list``, used to drive guest start/stop/restart buttons in the tree.
+    """
+    ctx = _Ctx(db, states or {}, live or {}, power or {})
     forest: list[dict] = []
 
     # --- Physical section: every host with no managed parent ---

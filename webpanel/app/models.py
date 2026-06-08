@@ -222,6 +222,9 @@ class Job(Base):
     # queued | running | success | failed | cancelled
     status: Mapped[str] = mapped_column(String(16), default="queued")
     mode: Mapped[str] = mapped_column(String(8), default="check")  # check | apply
+    # ansible | power — a power job runs a pct/qm/docker lifecycle command and
+    # skips the ansible-recap finalize (no config-state writes, no docker resync).
+    kind: Mapped[str] = mapped_column(String(16), default="ansible")
     target_type: Mapped[str] = mapped_column(String(16), default="host")  # all|group|host
     target_ref: Mapped[str | None] = mapped_column(String(255))
     plugin_tags: Mapped[str | None] = mapped_column(String(255))

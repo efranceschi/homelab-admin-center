@@ -7,7 +7,7 @@
    Imported `with context` so it sees csrf_token / current_role / hostname and
    can {% include "_host_state.html" %}. Rows carry data-search / data-groups for
    the client-side filter. #}
-{% from "_macros.html" import icon %}
+{% from "_macros.html" import icon, brand %}
 
 {% macro tree_rows(nodes) %}
   {% for n in nodes %}
@@ -32,25 +32,30 @@
         <span class="tree-ico text-warning">{{ icon('server', 14) }}</span>
         {% if n.server %}<a href="/hosts/{{ n.server.id }}" class="hs-link fw-semibold">{{ n.label }}</a>
         {% else %}<span class="fw-semibold">{{ n.label }}</span>{% endif %}
-        <span class="badge bg-warning-subtle text-warning-emphasis ms-1"
-              title="Hosts VMs/containers — Check/Apply here does NOT touch its guests">virtualization host</span>
+        <span class="ms-1 align-text-bottom"
+              title="Proxmox virtualization host — Check/Apply here does NOT touch its guests"
+              aria-label="Proxmox virtualization host">{{ brand('proxmox', 14) }}</span>
       {% elif n.kind == 'stack' %}
         <span class="tree-ico text-info">{{ icon('package', 14) }}</span>
         <span class="fw-semibold mono">{{ n.label }}</span>
-        <span class="badge bg-info-subtle text-info-emphasis ms-1"
-              title="Docker Compose stack (compose project)">stack</span>
+        <span class="ms-1 text-info align-text-bottom"
+              title="Docker Compose stack (compose project)"
+              aria-label="Docker Compose stack">{{ icon('layers', 14) }}</span>
       {% elif n.kind == 'docker' %}
         <span class="tree-ico text-info">{{ icon('box', 13) }}</span>
         <span class="mono">{{ n.label }}</span>
-        <span class="badge bg-info-subtle text-info-emphasis ms-1"
-              title="Docker container — display only, not Ansible-managed">docker</span>
+        <span class="ms-1 align-text-bottom"
+              title="Docker container — display only, not Ansible-managed"
+              aria-label="Docker container">{{ brand('docker', 13) }}</span>
       {% else %}
         <span class="tree-ico text-muted">{{ icon('cpu', 13) }}</span>
         <a href="/hosts/{{ n.server.id }}" class="hs-link">{{ n.label }}</a>
-        {% if n.guest_type %}<span class="badge bg-light text-dark border ms-1"
-              title="{{ 'QEMU virtual machine' if n.guest_type == 'qemu' else 'LXC container' }}">{{ 'VM' if n.guest_type == 'qemu' else 'CT' }}</span>{% endif %}
-        {% if n.virt_kind == 'docker' %}<span class="badge bg-info-subtle text-info-emphasis ms-1"
-              title="Runs Docker — its containers are shown as children">docker</span>{% endif %}
+        {% if n.guest_type %}<span class="ms-1 align-text-bottom"
+              title="{{ 'QEMU virtual machine' if n.guest_type == 'qemu' else 'LXC container' }}"
+              aria-label="{{ 'QEMU virtual machine' if n.guest_type == 'qemu' else 'LXC container' }}">{{ brand('qemu', 13) if n.guest_type == 'qemu' else brand('lxc', 13) }}</span>{% endif %}
+        {% if n.virt_kind == 'docker' %}<span class="ms-1 align-text-bottom"
+              title="Runs Docker — its containers are shown as children"
+              aria-label="Runs Docker">{{ brand('docker', 13) }}</span>{% endif %}
       {% endif %}
     </td>
 
@@ -73,16 +78,41 @@
 
     {% elif n.kind == 'stack' %}
       {% set _all = n.stack_total and n.stack_running == n.stack_total %}
-      <td><span class="badge bg-info-subtle text-info-emphasis">stack</span></td>
+      <td><span class="text-info" title="Docker Compose stack" aria-label="stack">{{ icon('layers', 14) }}</span></td>
       <td colspan="4" class="small">
         <span class="badge {{ 'bg-success-subtle text-success-emphasis' if _all else 'bg-secondary-subtle text-secondary-emphasis' }}"
               title="Containers running / total in this stack">{{ n.stack_running }}/{{ n.stack_total }} running</span>
       </td>
-      <td></td>
+      <td class="text-end text-nowrap">
+        {% if current_role == 'admin' %}
+        <span class="act-group">
+          {% set _stk = '/power/stack/' ~ n.host_server_id ~ '/' ~ (n.project | urlencode) %}
+          {% if n.stack_running < n.stack_total %}
+          <button type="button" class="act-btn act-btn-primary"
+                  data-action="{{ _stk }}/start"
+                  data-title="Start stack" data-ok="Start stack" data-ok-class="btn-success"
+                  data-confirm="Start all {{ n.stack_total }} container(s) in stack “{{ n.label }}”?"
+                  title="Start stack" aria-label="Start stack {{ n.label }}">{{ icon('play', 16) }}</button>
+          {% endif %}
+          {% if n.stack_running %}
+          <button type="button" class="act-btn act-btn-secondary"
+                  data-action="{{ _stk }}/restart" data-force-allow="1"
+                  data-title="Restart stack" data-ok="Restart stack" data-ok-class="btn-warning"
+                  data-confirm="Restart all {{ n.stack_total }} container(s) in stack “{{ n.label }}”? Graceful by default."
+                  title="Restart stack" aria-label="Restart stack {{ n.label }}">{{ icon('refresh', 16) }}</button>
+          <button type="button" class="act-btn act-btn-warning"
+                  data-action="{{ _stk }}/stop" data-force-allow="1"
+                  data-title="Stop stack" data-ok="Stop stack" data-ok-class="btn-warning"
+                  data-confirm="Stop all {{ n.stack_total }} container(s) in stack “{{ n.label }}”? Graceful by default; tick Force to kill."
+                  title="Stop stack" aria-label="Stop stack {{ n.label }}">{{ icon('power', 16) }}</button>
+          {% endif %}
+        </span>
+        {% endif %}
+      </td>
 
     {% elif n.kind == 'docker' %}
       {% set d = n.docker %}
-      <td><span class="badge bg-info-subtle text-info-emphasis">docker</span></td>
+      <td><span title="Docker container" aria-label="docker">{{ brand('docker', 14) }}</span></td>
       <td class="small mono text-truncate" style="max-width:22ch" title="{{ d.image }}">{{ d.image or '—' }}</td>
       <td>
         {% set _ok = d.state == 'running' %}
@@ -90,7 +120,30 @@
               title="{{ d.status }}">{{ d.status or d.state or 'unknown' }}</span>
       </td>
       <td class="small mono text-muted" title="Container ID">{{ d.container_id[:12] }}</td>
-      <td></td>
+      <td class="text-end text-nowrap">
+        {% if current_role == 'admin' %}
+        <span class="act-group">
+          {% if d.state == 'running' %}
+          <button type="button" class="act-btn act-btn-secondary"
+                  data-action="/power/docker/{{ d.id }}/restart" data-force-allow="1"
+                  data-title="Restart container" data-ok="Restart" data-ok-class="btn-warning"
+                  data-confirm="Restart container “{{ d.name or d.container_id[:12] }}”? Graceful by default."
+                  title="Restart" aria-label="Restart {{ d.name }}">{{ icon('refresh', 16) }}</button>
+          <button type="button" class="act-btn act-btn-warning"
+                  data-action="/power/docker/{{ d.id }}/stop" data-force-allow="1"
+                  data-title="Stop container" data-ok="Stop" data-ok-class="btn-warning"
+                  data-confirm="Stop container “{{ d.name or d.container_id[:12] }}”? Graceful by default; tick Force to kill."
+                  title="Stop" aria-label="Stop {{ d.name }}">{{ icon('power', 16) }}</button>
+          {% else %}
+          <button type="button" class="act-btn act-btn-primary"
+                  data-action="/power/docker/{{ d.id }}/start"
+                  data-title="Start container" data-ok="Start" data-ok-class="btn-success"
+                  data-confirm="Start container “{{ d.name or d.container_id[:12] }}”?"
+                  title="Start" aria-label="Start {{ d.name }}">{{ icon('play', 16) }}</button>
+          {% endif %}
+        </span>
+        {% endif %}
+      </td>
       <td class="small text-muted text-truncate text-end" style="max-width:18ch" title="{{ d.ports }}">{{ d.ports }}</td>
 
     {% elif n.server is none %}
@@ -102,6 +155,7 @@
       <td><span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></td>
       <td>
         {% if s.proxmox_vmid %}VMID {{ s.proxmox_vmid }}
+          {% if n.power and not is_vhost %}<span class="badge {{ 'bg-success-subtle text-success-emphasis' if n.power == 'running' else 'bg-secondary-subtle text-secondary-emphasis' }} ms-1" title="Power state">{{ n.power }}</span>{% endif %}
           {% if not s.enabled %}<span class="badge bg-secondary ms-1" title="Disabled — set SSH connection details">needs SSH</span>{% endif %}
         {% elif is_vhost or s.connection_type == 'local' %}
           <span class="badge bg-light text-dark border" title="Proxmox node">🖳 {{ hostname }}</span>
@@ -126,6 +180,38 @@
       </td>
       <td class="text-end text-nowrap">
         <span class="act-group">
+        {# Power controls: per-guest for a controllable LXC/QEMU; bulk for a node. #}
+        {% if current_role == 'admin' and not is_vhost and n.guest_type %}
+          {% if n.power == 'running' %}
+          <button type="button" class="act-btn act-btn-secondary"
+                  data-action="/power/server/{{ s.id }}/restart" data-force-allow="1"
+                  data-title="Restart guest" data-ok="Restart" data-ok-class="btn-warning"
+                  data-confirm="Restart “{{ s.name }}” ({{ 'VM' if n.guest_type == 'qemu' else 'CT' }} {{ s.proxmox_vmid }})? Graceful reboot by default."
+                  title="Restart" aria-label="Restart {{ s.name }}">{{ icon('refresh', 16) }}</button>
+          <button type="button" class="act-btn act-btn-warning"
+                  data-action="/power/server/{{ s.id }}/stop" data-force-allow="1"
+                  data-title="Stop guest" data-ok="Stop" data-ok-class="btn-warning"
+                  data-confirm="Shut down “{{ s.name }}” ({{ 'VM' if n.guest_type == 'qemu' else 'CT' }} {{ s.proxmox_vmid }})? Graceful by default; tick Force to kill."
+                  title="Stop" aria-label="Stop {{ s.name }}">{{ icon('power', 16) }}</button>
+          {% else %}
+          <button type="button" class="act-btn act-btn-primary"
+                  data-action="/power/server/{{ s.id }}/start"
+                  data-title="Start guest" data-ok="Start" data-ok-class="btn-success"
+                  data-confirm="Start “{{ s.name }}” ({{ 'VM' if n.guest_type == 'qemu' else 'CT' }} {{ s.proxmox_vmid }})?"
+                  title="Start" aria-label="Start {{ s.name }}">{{ icon('play', 16) }}</button>
+          {% endif %}
+        {% elif current_role == 'admin' and is_vhost and n.children %}
+          <button type="button" class="act-btn act-btn-primary"
+                  data-action="/power/node/{{ s.id }}/start"
+                  data-title="Start all guests" data-ok="Start all" data-ok-class="btn-success"
+                  data-confirm="Start ALL {{ n.children|length }} guest(s)/container(s) on node “{{ s.name }}”?"
+                  title="Start all guests" aria-label="Start all guests on {{ s.name }}">{{ icon('play', 16) }}</button>
+          <button type="button" class="act-btn act-btn-warning"
+                  data-action="/power/node/{{ s.id }}/stop" data-force-allow="1"
+                  data-title="Stop all guests" data-ok="Stop all" data-ok-class="btn-warning"
+                  data-confirm="Stop ALL {{ n.children|length }} guest(s)/container(s) on node “{{ s.name }}”? Graceful by default; tick Force to kill."
+                  title="Stop all guests" aria-label="Stop all guests on {{ s.name }}">{{ icon('power', 16) }}</button>
+        {% endif %}
         {% if n.state and n.state.config_status == 'pending' and current_role == 'admin' %}
         <button type="button" class="act-btn act-btn-primary"
                 data-action="/hosts/{{ s.id }}/apply"

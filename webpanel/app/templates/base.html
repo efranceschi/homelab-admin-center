@@ -159,6 +159,15 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body" id="confirm-body">Are you sure?</div>
+      {# Optional force toggle, revealed for triggers with data-force-allow. The
+         checkbox carries name=force value=1, so an unchecked box simply omits the
+         field (graceful) and only an explicit tick posts force=1. #}
+      <div class="form-check mx-3 mb-2 d-none" id="confirm-force-wrap">
+        <input class="form-check-input" type="checkbox" name="force" value="1" id="confirm-force">
+        <label class="form-check-label small text-danger-emphasis" for="confirm-force">
+          Force (kill) — may corrupt unsaved state / filesystem
+        </label>
+      </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="submit" class="btn btn-danger" id="confirm-ok">Confirm</button>
@@ -180,6 +189,11 @@ document.addEventListener('click', function (ev) {
   ok.textContent = t.getAttribute('data-ok') || 'Confirm';
   ok.className = 'btn ' + (t.getAttribute('data-ok-class') || 'btn-danger');
   ok.style.minWidth = ''; ok.removeAttribute('aria-busy');
+  // Force toggle: reset and reveal only for triggers that opt in.
+  const fw = document.getElementById('confirm-force-wrap');
+  const fb = document.getElementById('confirm-force');
+  fb.checked = false;
+  fw.classList.toggle('d-none', !t.getAttribute('data-force-allow'));
   document.querySelectorAll('#confirm-modal [data-bs-dismiss="modal"]').forEach(b => { b.disabled = false; });
   bootstrap.Modal.getOrCreateInstance(document.getElementById('confirm-modal')).show();
 });

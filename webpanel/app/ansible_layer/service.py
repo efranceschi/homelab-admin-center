@@ -1,6 +1,7 @@
 """Orchestrate a panel job: prepare run dir, inventory, vars, command, launch."""
 from __future__ import annotations
 
+import shlex
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -13,7 +14,8 @@ from ..plugins import registry
 from . import inventory_builder, runner, vars_builder
 
 __all__ = [
-    "start_job", "start_jobs", "JobBusyError", "PanelRestarting", "recover_selection",
+    "start_job", "start_jobs", "start_power_job", "JobBusyError", "PanelRestarting",
+    "recover_selection",
 ]
 
 
@@ -128,6 +130,72 @@ async def start_job(
 
     db.commit()  # persist the job row before the async task touches it
     manager.submit(job_id, cmd, env, run_dir, [s.id for s in servers])
+    return job
+
+
+def _join_commands(cmds: list[list[str]]) -> list[str]:
+    """Collapse one or more argv lists into a single command to run.
+
+    A single command runs directly (so cancel can SIGTERM it cleanly). Multiple
+    commands (a forced restart, or any bulk stack/node action) run under
+    ``bash -lc`` joined with ``;`` so an already-stopped member doesn't abort the
+    rest of the batch."""
+    if len(cmds) == 1:
+        return cmds[0]
+    return ["bash", "-lc", " ; ".join(shlex.join(c) for c in cmds)]
+
+
+async def start_power_job(
+    db: Session,
+    *,
+    user_id: int | None,
+    kind: str,
+    target_id,
+    action: str,
+    force: bool,
+) -> Job:
+    """Create a power job (a pct/qm/docker lifecycle action) and submit it.
+
+    Reuses the job manager end-to-end: the command(s) stream over SSE exactly
+    like a check/apply run, but the job is tagged ``kind="power"`` so
+    :meth:`JobManager._finalize` skips the ansible-recap path (no config-state
+    rewrite, no docker resync). Any SSH key files are written into the job's run
+    dir so ``_cleanup_secrets`` removes them after the run.
+    """
+    from .. import power
+
+    job = Job(
+        status="queued",
+        kind="power",
+        mode="check",  # unused for power jobs, but the column is NOT NULL
+        target_type="host",
+        triggered_by=user_id,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(job)
+    db.flush()  # assign job.id
+    job_id = job.id
+
+    run_dir = config.RUN_DIRS / f"job-{job_id}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        cmds, label, server_ids = power.build_power_commands(
+            db, kind=kind, target_id=target_id, action=action, force=force, run_dir=run_dir,
+        )
+    except Exception:
+        # Don't leave an orphan queued row when command-building fails — the
+        # route catches the error (so db_dependency commits) and renders it.
+        db.delete(job)
+        db.flush()
+        raise
+
+    job.target_ref = f"{action}: {label}"
+    job.server_ids = ",".join(str(i) for i in server_ids)
+
+    cmd = _join_commands(cmds)
+    env = runner.build_env()
+    db.commit()  # persist before the async task touches the row
+    manager.submit(job_id, cmd, env, run_dir, server_ids)
     return job
 
 

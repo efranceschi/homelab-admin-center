@@ -24,6 +24,7 @@ from .routers import credentials as credentials_router
 from .routers import groups as groups_router
 from .routers import jobs as jobs_router
 from .routers import plugins as plugins_router
+from .routers import power as power_router
 from .routers import schedules as schedules_router
 from .routers import settings as settings_router
 from .scheduler import manager as scheduler_manager
@@ -166,6 +167,7 @@ def create_app() -> FastAPI:
     app.include_router(groups_router.router)
     app.include_router(plugins_router.router)
     app.include_router(jobs_router.router)
+    app.include_router(power_router.router)
     app.include_router(schedules_router.router)
     app.include_router(settings_router.router)
 

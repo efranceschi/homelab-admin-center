@@ -297,11 +297,29 @@ class JobManager:
         from sqlalchemy import select
 
         text = "".join(rt.lines)
-        recap = results.parse_recap(text)
-        reboot_hosts = results.parse_reboot(text)
         finished = datetime.now(timezone.utc)
         with session_scope() as db:
             job = db.get(Job, rt.job_id)
+            # Power jobs (pct/qm/docker lifecycle) emit none of the ansible-recap
+            # markers; running the ansible finalize would corrupt config-state and
+            # (with an empty docker probe) prune the host's docker_containers. Skip
+            # it entirely — just persist the result and a history event.
+            if job and job.kind == "power":
+                job.status = rt.status
+                job.return_code = rc
+                job.finished_at = finished
+                job.pid = None
+                job.log_text = text
+                for sid in server_ids:
+                    if db.get(Server, sid) is not None:
+                        db.add(HostEvent(
+                            server_id=sid, kind="power", status=rt.status,
+                            message=f"Power job {rt.status} (rc={rc})",
+                            job_id=rt.job_id,
+                        ))
+                return
+            recap = results.parse_recap(text)
+            reboot_hosts = results.parse_reboot(text)
             mode = job.mode if job else "check"
             if job:
                 job.status = rt.status
