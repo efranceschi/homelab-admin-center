@@ -107,6 +107,12 @@ def run_scheduler() -> None:
 
     signal.signal(signal.SIGTERM, _term)
     signal.signal(signal.SIGINT, _term)
+    # The main process installs a SIGHUP graceful-restart handler; this child is
+    # spawned via Popen and would otherwise inherit that disposition. Reset it to
+    # the default (terminate) so a stray HUP to the child never triggers the
+    # app's drain/restart logic here. (Job subprocesses exec a new program, which
+    # already drops inherited Python handlers — only this child needs the reset.)
+    signal.signal(signal.SIGHUP, signal.SIG_DFL)
 
     last_housekeep = 0.0  # 0 => run once on the first iteration
     last_discovery = 0.0  # 0 => run once on the first iteration

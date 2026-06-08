@@ -25,6 +25,11 @@ class JobBusyError(RuntimeError):
     """Raised when a job is already running (panel-level or via the flock)."""
 
 
+class PanelRestarting(RuntimeError):
+    """Raised when a new job is submitted while the panel is draining for a
+    SIGHUP-triggered graceful restart. Surfaced to callers as HTTP 503."""
+
+
 class JobRuntime:
     def __init__(self, job_id: int, log_path: Path) -> None:
         self.job_id = job_id
@@ -57,6 +62,11 @@ DEFAULT_MAX_CONCURRENT = 5
 MAX_MAX_CONCURRENT = 10
 _RETRY_SECONDS = 5  # re-check the flock this often while runs are queued
 
+# Graceful-restart drain timeout (seconds). On a SIGHUP the panel waits this long
+# for running jobs to finish before forcing the restart; 0 = wait indefinitely.
+DEFAULT_DRAIN_TIMEOUT = 300
+_DRAIN_POLL_SECONDS = 0.5  # how often the drain loop re-checks the active set
+
 
 class JobManager:
     """Runs panel jobs with a bounded pool + FIFO queue.
@@ -74,6 +84,9 @@ class JobManager:
         self._queue: list[tuple[int, list[str], dict[str, str], Path, list[int]]] = []
         self._lock_fd: int | None = None
         self._retry_handle: asyncio.TimerHandle | None = None
+        # Graceful-restart state (set by the SIGHUP handler via begin_drain).
+        self._draining = False
+        self._drain_task: asyncio.Task | None = None
 
     # --- introspection ------------------------------------------------------
     @property
@@ -115,6 +128,24 @@ class JobManager:
         """True when the running pool is at capacity (further runs would queue)."""
         return len(self._active) >= self.max_concurrent()
 
+    def is_draining(self) -> bool:
+        """True once a SIGHUP graceful restart is in progress (queue frozen,
+        new submissions refused). Surfaced in health and the UI banner."""
+        return self._draining
+
+    def drain_timeout(self) -> int:
+        """Drain timeout in seconds (``restart_drain_timeout_seconds`` setting;
+        default 300, ``0`` = wait indefinitely). Read like ``max_concurrent``."""
+        from .models import Setting
+
+        try:
+            with session_scope() as db:
+                row = db.get(Setting, "restart_drain_timeout_seconds")
+                n = int(row.value) if row and str(row.value).strip() else DEFAULT_DRAIN_TIMEOUT
+        except (ValueError, TypeError, Exception):
+            n = DEFAULT_DRAIN_TIMEOUT
+        return max(0, n)
+
     # --- flock interlock (shared with the scheduler) ------------------------
     def _acquire_flock(self) -> bool:
         """Ensure the shared run-lock is held. Returns False if another process
@@ -149,6 +180,11 @@ class JobManager:
         target_server_ids: list[int],
     ) -> None:
         """Enqueue a job (already persisted as ``queued``) and try to dispatch."""
+        if self._draining:
+            # Refuse new work while draining for a graceful restart; the caller
+            # (service.start_job) has already created the queued Job row, but the
+            # startup recovery will mark it failed, consistent with frozen queue.
+            raise PanelRestarting("Panel is restarting; new jobs are refused.")
         self._queue.append((job_id, cmd, env, run_dir, target_server_ids))
         self._dispatch()
 
@@ -171,6 +207,10 @@ class JobManager:
         if self._retry_handle is not None:
             self._retry_handle.cancel()
             self._retry_handle = None
+        # Freeze the queue while draining: never promote queued -> running so the
+        # active set can only shrink toward zero (then the drain restarts us).
+        if self._draining:
+            return
         limit = self.max_concurrent()
         while self._queue and len(self._active) < limit:
             if not self._acquire_flock():
@@ -368,6 +408,57 @@ class JobManager:
                         job.status = "cancelled"
                 return True
         return False
+
+    # --- graceful restart (SIGHUP) ------------------------------------------
+    def begin_drain(self) -> None:
+        """Enter the draining state and start the drain-then-restart task.
+
+        Called from the main process's SIGHUP handler (on the event loop, so it
+        is safe to touch the running set and schedule a task). Re-entrant: a
+        second call while already draining escalates to an immediate forced
+        restart — the operator's "don't wait" escape hatch (spec §4.4)."""
+        if self._draining:
+            print("[hac] second SIGHUP while draining — forcing immediate restart",
+                  flush=True)
+            self._force_restart()
+            return
+        self._draining = True
+        active = self.active_job_ids()
+        print(
+            f"[hac] SIGHUP: draining for graceful restart "
+            f"(running={len(active)} queued={len(self._queue)})",
+            flush=True,
+        )
+        try:
+            self._drain_task = asyncio.create_task(self._drain_and_restart())
+        except RuntimeError:
+            # No running loop (shouldn't happen on the main process) — restart now.
+            self._force_restart()
+
+    async def _drain_and_restart(self) -> None:
+        """Wait for running jobs to finish (bounded by the drain timeout), then
+        restart. On timeout, log the force-aborted job ids and restart anyway."""
+        timeout = self.drain_timeout()
+        deadline = None if timeout <= 0 else asyncio.get_event_loop().time() + timeout
+        while self._active:
+            if deadline is not None and asyncio.get_event_loop().time() >= deadline:
+                aborted = self.active_job_ids()
+                print(
+                    f"[hac] drain timeout after {timeout}s — forcing restart, "
+                    f"aborting job ids {aborted} (will be marked failed on startup)",
+                    flush=True,
+                )
+                self._force_restart()
+                return
+            await asyncio.sleep(_DRAIN_POLL_SECONDS)
+        print("[hac] drain complete — restarting", flush=True)
+        self._force_restart()
+
+    @staticmethod
+    def _force_restart() -> None:
+        from . import system
+
+        system.force_restart()  # os._exit(0) under systemd; self re-exec otherwise
 
 
 manager = JobManager()

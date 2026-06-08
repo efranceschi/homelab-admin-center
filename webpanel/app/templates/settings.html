@@ -80,7 +80,11 @@
 <div class="card mb-4" id="runtime">
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>Jobs &amp; automation</span>
+    {% if draining %}
+    <span class="st st-warn">{{ icon('refresh', 12) }} draining (restarting)</span>
+    {% else %}
     <span class="st st-info">{{ icon('activity', 12) }} {{ running_jobs }} running · {{ queued_jobs }} queued</span>
+    {% endif %}
   </div>
   <div class="card-body">
     <form method="post" action="/settings/runtime">
@@ -99,6 +103,14 @@
                  min="0" max="3600" step="10" value="{{ auto_refresh_seconds }}">
           <div class="form-text">Volatile views (Dashboard, Jobs, Hosts, Schedules)
             reload on this interval. <code>0</code> disables; minimum 10s.</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Restart drain timeout (seconds)</label>
+          <input class="form-control form-control-sm mono" type="number" name="restart_drain_timeout_seconds"
+                 min="0" max="3600" step="10" value="{{ restart_drain_timeout_seconds }}">
+          <div class="form-text">On <code>SIGHUP</code> the panel drains running jobs
+            before restarting, waiting up to this long. <code>0</code> = wait
+            indefinitely. Run <code>kill -HUP $(cat run_dirs/hac.pid)</code>.</div>
         </div>
       </div>
       <button class="btn btn-primary btn-sm mt-3"><span class="btn-ico">{{ icon('check', 14) }}</span> Save</button>

@@ -7,12 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..jobs import JobBusyError, manager
+from ..jobs import JobBusyError, PanelRestarting, manager
 from ..models import Job, Server
 from ..plugins import registry
 from . import inventory_builder, runner, vars_builder
 
-__all__ = ["start_job", "start_jobs", "JobBusyError", "recover_selection"]
+__all__ = [
+    "start_job", "start_jobs", "JobBusyError", "PanelRestarting", "recover_selection",
+]
 
 
 def recover_selection(db: Session, job: Job) -> tuple[list[int], list[str], list[int]]:

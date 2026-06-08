@@ -57,8 +57,11 @@ def set_auto_refresh_seconds(value: int | None) -> None:
     templates.env.globals["auto_refresh_seconds"] = max(0, min(3600, n))
 
 
-def render(request: Request, name: str, **ctx):
-    """Render a template with common context (csrf, current user)."""
+def render(request: Request, name: str, *, status_code: int = 200, **ctx):
+    """Render a template with common context (csrf, current user).
+
+    ``status_code`` lets callers return non-200 HTML (e.g. a 503 while the panel
+    is draining for restart) without bypassing the shared context seeding."""
     base = {
         "request": request,
         "csrf_token": get_csrf_token(request),
@@ -76,4 +79,4 @@ def render(request: Request, name: str, **ctx):
         base["queue_max"] = manager.max_concurrent()      # one PK Setting read
     base.update(ctx)
     # Starlette >=0.29 signature: TemplateResponse(request, name, context).
-    return templates.TemplateResponse(request, name, base)
+    return templates.TemplateResponse(request, name, base, status_code=status_code)

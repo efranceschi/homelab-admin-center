@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .. import system
 from ..auth import create_user, current_user, require_admin, verify_csrf
 from ..db import db_dependency
-from ..jobs import DEFAULT_MAX_CONCURRENT, MAX_MAX_CONCURRENT
+from ..jobs import DEFAULT_DRAIN_TIMEOUT, DEFAULT_MAX_CONCURRENT, MAX_MAX_CONCURRENT
 from ..jobs import manager as job_manager
 from ..models import AuditLog, Setting, User
 from ..plugins import registry
@@ -53,8 +53,12 @@ def settings_home(
         max_concurrent_jobs=_get_setting_int(db, "max_concurrent_jobs", DEFAULT_MAX_CONCURRENT),
         max_concurrent_cap=MAX_MAX_CONCURRENT,
         auto_refresh_seconds=_get_setting_int(db, "auto_refresh_seconds", 180),
+        restart_drain_timeout_seconds=_get_setting_int(
+            db, "restart_drain_timeout_seconds", DEFAULT_DRAIN_TIMEOUT
+        ),
         running_jobs=job_manager.running_count(),
         queued_jobs=job_manager.queued_count(),
+        draining=job_manager.is_draining(),
     )
 
 
@@ -81,10 +85,11 @@ def update_runtime(
     request: Request,
     max_concurrent_jobs: int = Form(DEFAULT_MAX_CONCURRENT),
     auto_refresh_seconds: int = Form(180),
+    restart_drain_timeout_seconds: int = Form(DEFAULT_DRAIN_TIMEOUT),
     db: Session = Depends(db_dependency),
     user: User = Depends(require_admin),
 ):
-    """Job concurrency + page auto-refresh interval (admin)."""
+    """Job concurrency + page auto-refresh interval + restart drain timeout."""
     mc = max(1, min(MAX_MAX_CONCURRENT, max_concurrent_jobs))
     ar = auto_refresh_seconds
     if ar < 0:
@@ -92,8 +97,15 @@ def update_runtime(
     if 0 < ar < 10:
         ar = 10
     ar = min(3600, ar)
+    # Graceful-restart drain timeout: 0 = wait indefinitely, else clamp to a
+    # sane upper bound (1h) so a typo can't pin the panel mid-restart forever.
+    dt = restart_drain_timeout_seconds
+    if dt < 0:
+        dt = 0
+    dt = min(3600, dt)
     _set_setting(db, "max_concurrent_jobs", str(mc))
     _set_setting(db, "auto_refresh_seconds", str(ar))
+    _set_setting(db, "restart_drain_timeout_seconds", str(dt))
     # Commit BEFORE dispatching: the JobManager re-reads max_concurrent_jobs in a
     # fresh session, so the new limit must already be persisted or the immediate
     # dispatch would still see the old value (and a raised limit wouldn't start

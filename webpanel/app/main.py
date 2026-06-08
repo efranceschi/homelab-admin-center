@@ -1,17 +1,23 @@
 """FastAPI application factory for HomeLab Admin Center (hac)."""
 from __future__ import annotations
 
+import asyncio
+import os
+import signal
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import config, crypto
 from .auth import install_redirect_handler
 from .db import init_db, session_scope
+from .jobs import PanelRestarting
+from .jobs import manager as job_manager
 from .plugins import registry, sync_to_db
+from .templating import render
 from .routers import auth as auth_router
 from .routers import dashboard, hosts
 from .routers import groups as groups_router
@@ -46,6 +52,36 @@ def _ensure_default_schedules(db) -> None:
     db.add(Setting(key="drift_schedule_seeded", value="1", value_type="str"))
 
 
+def _write_pidfile() -> None:
+    """Record the main process PID so operators can `kill -HUP $(cat hac.pid)`.
+    Mirrors the scheduler's pidfile handling (same RUN_DIRS)."""
+    config.RUN_DIRS.mkdir(parents=True, exist_ok=True)
+    config.HAC_PIDFILE.write_text(str(os.getpid()))
+
+
+def _install_sighup_handler() -> None:
+    """Install the graceful-restart SIGHUP handler on the MAIN process only.
+
+    Registered on the asyncio loop so the callback runs on the loop (not inside
+    the C signal handler), making it safe to touch the JobManager and schedule a
+    task. The scheduler child and job subprocesses must NOT run this: the
+    scheduler child resets SIGHUP to SIG_DFL in run_scheduler(), and job
+    subprocesses are spawned via create_subprocess_exec which exec()s a new
+    program (signal dispositions don't carry across exec), so neither inherits
+    this handler — a HUP to a child can never trigger an app restart loop."""
+    loop = asyncio.get_event_loop()
+    try:
+        loop.add_signal_handler(signal.SIGHUP, job_manager.begin_drain)
+    except (NotImplementedError, RuntimeError):
+        # add_signal_handler is unavailable (non-Unix / no running loop): fall
+        # back to signal.signal, scheduling the drain back onto the loop so no
+        # heavy work runs inside the signal handler itself.
+        def _handler(_sig, _frm):
+            loop.call_soon_threadsafe(job_manager.begin_drain)
+
+        signal.signal(signal.SIGHUP, _handler)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup/shutdown (replaces the deprecated on_event hooks)."""
@@ -78,8 +114,13 @@ async def lifespan(app: FastAPI):
     if not config._envflag("PANEL_DISABLE_SCHEDULER"):
         scheduler_manager.ensure_running()
 
+    # Main-process-only: pidfile + SIGHUP graceful-restart handler.
+    _write_pidfile()
+    _install_sighup_handler()
+
     yield
 
+    config.HAC_PIDFILE.unlink(missing_ok=True)
     scheduler_manager.stop()
 
 
@@ -101,6 +142,21 @@ def create_app() -> FastAPI:
     )
 
     install_redirect_handler(app)
+
+    @app.exception_handler(PanelRestarting)
+    def _panel_restarting(request: Request, exc: PanelRestarting):
+        """A submission hit a draining panel: refuse with HTTP 503. JSON for
+        fetch/XHR callers (incl. the scheduler's on-demand run), an HTML notice
+        otherwise."""
+        msg = str(exc) or "Panel is restarting; new jobs are refused."
+        accept = request.headers.get("accept", "")
+        wants_json = (
+            request.headers.get("x-requested-with") == "fetch"
+            or "application/json" in accept
+        )
+        if wants_json:
+            return JSONResponse({"detail": msg}, status_code=503)
+        return render(request, "error.html", message=msg, status_code=503)
 
     app.include_router(auth_router.router)
     app.include_router(dashboard.router)

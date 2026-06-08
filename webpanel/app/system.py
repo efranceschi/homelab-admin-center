@@ -69,3 +69,19 @@ def request_restart(delay: float = 1.0) -> str:
 
     threading.Thread(target=_respawn, daemon=True).start()
     return "Restarting (process will respawn)…"
+
+
+def force_restart() -> None:
+    """Restart immediately, in-line, without the delayed background thread.
+
+    Used by the SIGHUP graceful-restart path when the drain finishes (or its
+    timeout expires / a second HUP arrives): we are already off the request path
+    and want the respawn to happen now, not after a delay. Same mechanics as
+    :func:`request_restart` (systemd respawn vs. self re-exec)."""
+    if under_systemd():
+        os._exit(0)  # systemd (Restart=always) brings us back fresh
+    try:
+        # nosemgrep: python.lang.security.audit.dangerous-os-exec-tainted-env-args.dangerous-os-exec-tainted-env-args -- self-respawn: argv is our own process argv, not external input
+        os.execv(sys.executable, [sys.executable, sys.argv[0], *sys.argv[1:]])
+    except Exception:
+        os._exit(0)  # let any supervisor bring it back

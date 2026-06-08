@@ -44,6 +44,11 @@ PLUGINS_DIR = PANEL_DIR / "plugins"
 # Per-job working directories (inventory, extra-vars, logs).
 RUN_DIRS = PANEL_DIR / "run_dirs"
 
+# PID of the main panel process, written at startup / removed on clean shutdown.
+# Enables a sudo-free, HTTP-free graceful restart: `kill -HUP $(cat hac.pid)`.
+# Mirrors the scheduler's scheduler.pid (same RUN_DIRS, created by ensure_*dirs).
+HAC_PIDFILE = RUN_DIRS / "hac.pid"
+
 # Persistent state. Defaults live under /var/lib so the DB is outside the git
 # tree; falls back to the panel dir for unprivileged/dev runs.
 _DEFAULT_STATE_DIR = "/var/lib/hac"

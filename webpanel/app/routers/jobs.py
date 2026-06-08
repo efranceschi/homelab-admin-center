@@ -69,6 +69,7 @@ def queue_status(user: User = Depends(current_user)):
         "queued": manager.queued_count(),
         "max_concurrent": manager.max_concurrent(),
         "busy": manager.is_busy(),
+        "draining": manager.is_draining(),
     }
 
 

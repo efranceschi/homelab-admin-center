@@ -126,6 +126,12 @@
       </div>
     </header>
 
+    {# Graceful-restart banner: hidden until the queue poller sees draining=true
+       (a SIGHUP drain is in progress). New job submissions are refused (503). #}
+    <div id="restart-banner" class="alert alert-warning text-center m-0 rounded-0 py-2" role="status" hidden>
+      {{ icon('refresh', 14) }} Panel is restarting — draining running jobs. New jobs are temporarily refused.
+    </div>
+
     <main class="app-content">
       {% block content %}{% endblock %}
     </main>
@@ -255,6 +261,7 @@ document.addEventListener('submit', function (ev) {
   const elMax = document.getElementById('qi-max');
   const elQ = document.getElementById('qi-queued');
   const elQn = document.getElementById('qi-queued-n');
+  const banner = document.getElementById('restart-banner');
   const BUSY_MS = 2000, IDLE_MS = 10000;
 
   async function poll() {
@@ -263,7 +270,10 @@ document.addEventListener('submit', function (ev) {
       const r = await fetch('/jobs/queue-status', { headers: { 'X-Requested-With': 'fetch' } });
       if (r.ok) {
         const d = await r.json();
-        busy = !!d.busy;
+        // While draining for a graceful restart, keep polling fast and show the
+        // "panel restarting" banner; submissions are refused until we respawn.
+        if (banner) banner.hidden = !d.draining;
+        busy = !!d.busy || !!d.draining;
         elRun.textContent = d.running;
         elMax.textContent = d.max_concurrent;
         if (d.queued > 0) { elQn.textContent = d.queued; elQ.hidden = false; }
