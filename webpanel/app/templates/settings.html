@@ -118,6 +118,53 @@
   </div>
 </div>
 
+<div class="card mb-4" id="netscan">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Network scan</span>
+    <span class="act-group">
+      <form method="post" action="/settings/subnets/scan" class="d-inline m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="act-btn act-btn-secondary" {% if not subnets %}disabled{% endif %}
+                title="Scan subnets now" aria-label="Scan subnets now">{{ icon('search', 16) }}</button>
+      </form>
+      <button class="act-btn act-btn-primary" data-bs-toggle="modal" data-bs-target="#add-subnet-modal"
+              title="Add subnet" aria-label="Add subnet">{{ icon('plus', 16) }}</button>
+    </span>
+  </div>
+  <div class="card-body pb-0">
+    <p class="small text-muted">Subnets swept for SSH-reachable (TCP 22) hosts. Finds
+      surface in <a href="/hosts#tab-discovered">Hosts → Discovered</a>. Runs daily
+      via the <code>network-scan</code> schedule, or on demand here. Formats:
+      CIDR <code>192.168.0.0/24</code>, wildcard <code>192.168.0.*</code>,
+      range <code>192.168.0.1-50</code>.</p>
+  </div>
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Label</th><th>Spec</th><th>Enabled</th><th class="text-end">Actions</th></tr></thead>
+    <tbody>
+    {% for sn in subnets %}
+      <tr>
+        <td>{{ sn.label or '—' }}</td>
+        <td class="mono">{{ sn.spec }}</td>
+        <td>
+          <form method="post" action="/settings/subnets/{{ sn.id }}/toggle" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="act-btn {{ 'act-btn-success' if sn.enabled else '' }}"
+                    title="{{ 'Enabled — click to disable' if sn.enabled else 'Disabled — click to enable' }}"
+                    aria-label="{{ 'Disable subnet' if sn.enabled else 'Enable subnet' }}">{{ icon('power', 16) }}</button></form>
+        </td>
+        <td class="text-end">
+          <button type="button" class="act-btn act-btn-danger"
+                  data-action="/settings/subnets/{{ sn.id }}/delete"
+                  data-title="Delete subnet" data-ok="Delete"
+                  data-confirm="Delete subnet “{{ sn.spec }}”?"
+                  title="Delete subnet" aria-label="Delete subnet {{ sn.spec }}">{{ icon('trash', 16) }}</button>
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="4" class="text-muted">No subnets yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
 <div class="row g-4">
   <div class="col-lg-6" id="plugins">
     <div class="card h-100"><div class="card-header">Plugins</div><div class="card-body">
@@ -161,6 +208,32 @@
         <code>hac</code> systemd service.</div>
       {% endif %}
     </div></div>
+  </div>
+</div>
+
+{# ---- Add subnet modal --------------------------------------------------- #}
+<div class="modal fade" id="add-subnet-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="/settings/subnets">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="modal-header">
+        <h5 class="modal-title">Add subnet</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2"><label class="form-label">Spec</label>
+          <input class="form-control form-control-sm mono" name="spec" required
+                 placeholder="192.168.0.0/24">
+          <div class="form-text">CIDR, wildcard (<code>192.168.0.*</code>) or range
+            (<code>192.168.0.1-50</code>). Comma-separate multiple.</div></div>
+        <div class="mb-2"><label class="form-label">Label <span class="text-muted small">(optional)</span></label>
+          <input class="form-control form-control-sm" name="label" placeholder="LAN"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary">Add subnet</button>
+      </div>
+    </form>
   </div>
 </div>
 

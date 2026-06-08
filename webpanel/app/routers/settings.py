@@ -1,17 +1,19 @@
 """App settings and user management (admin only)."""
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import system
+from .. import netscan, system
 from ..auth import create_user, current_user, require_admin, verify_csrf
 from ..db import db_dependency
 from ..jobs import DEFAULT_DRAIN_TIMEOUT, DEFAULT_MAX_CONCURRENT, MAX_MAX_CONCURRENT
 from ..jobs import manager as job_manager
-from ..models import AuditLog, Setting, User
+from ..models import AuditLog, Setting, Subnet, User
 from ..plugins import registry
 from ..scheduler import manager as scheduler_manager
 from ..templating import render, set_auto_refresh_seconds, set_instance_name
@@ -42,10 +44,12 @@ def settings_home(
     user: User = Depends(current_user),
 ):
     users = db.scalars(select(User).order_by(User.username)).all()
+    subnets = db.scalars(select(Subnet).order_by(Subnet.id)).all()
     return render(
         request,
         "settings.html",
         users=users,
+        subnets=subnets,
         plugins=registry.all(),
         scheduler=scheduler_manager.status(),
         under_systemd=system.under_systemd(),
@@ -142,6 +146,71 @@ def system_restart(
     db.commit()
     note = system.request_restart(delay=1.5)
     return render(request, "system_action.html", title="Restart", output="", note=note)
+
+
+# --------------------------------------------------------------------------- #
+# Network-scan subnets
+# --------------------------------------------------------------------------- #
+@router.post("/subnets", dependencies=[Depends(verify_csrf)])
+def add_subnet(
+    request: Request,
+    spec: str = Form(...),
+    label: str = Form(""),
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    """Register a subnet to sweep. Validates the spec via the scan parser."""
+    spec = spec.strip()
+    try:
+        netscan.parse_targets(spec)
+    except ValueError as exc:
+        return render(request, "error.html", message=f"Invalid subnet “{spec}”: {exc}")
+    db.add(Subnet(spec=spec, label=label.strip() or None, created_by=user.id))
+    db.add(AuditLog(user_id=user.id, action="subnet.add", target=spec))
+    return RedirectResponse("/settings#netscan", status_code=303)
+
+
+@router.post("/subnets/{subnet_id}/toggle", dependencies=[Depends(verify_csrf)])
+def toggle_subnet(
+    subnet_id: int,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    sn = db.get(Subnet, subnet_id)
+    if sn:
+        sn.enabled = not sn.enabled
+    return RedirectResponse("/settings#netscan", status_code=303)
+
+
+@router.post("/subnets/{subnet_id}/delete", dependencies=[Depends(verify_csrf)])
+def delete_subnet(
+    subnet_id: int,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    sn = db.get(Subnet, subnet_id)
+    if sn:
+        db.add(AuditLog(user_id=user.id, action="subnet.delete", target=sn.spec))
+        db.delete(sn)
+    return RedirectResponse("/settings#netscan", status_code=303)
+
+
+@router.post("/subnets/scan", dependencies=[Depends(verify_csrf)])
+async def scan_subnets_now(
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    """Run a network scan now (also runs daily via the network-scan schedule).
+
+    Off-loaded to a thread because the sweep blocks on socket I/O;
+    ``run_network_scan`` manages its own session."""
+    stats = await asyncio.to_thread(netscan.run_network_scan)
+    db.add(AuditLog(
+        user_id=user.id, action="subnet.scan",
+        target=f"open={stats['open']} new={stats['new']}",
+    ))
+    return RedirectResponse("/settings#netscan", status_code=303)
 
 
 @router.post("/users", dependencies=[Depends(verify_csrf)])

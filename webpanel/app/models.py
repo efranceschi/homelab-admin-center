@@ -362,6 +362,10 @@ class Schedule(Base):
     interval_minutes: Mapped[int | None] = mapped_column(Integer)
     daily_time: Mapped[str | None] = mapped_column(String(5))  # "HH:MM"
     mode: Mapped[str] = mapped_column(String(8), default="apply")  # check | apply
+    # What the schedule does. 'ansible' fires a check/apply run over its targets;
+    # 'network_scan' sweeps the registered subnets for new hosts (the targets/
+    # plugins/mode fields are ignored for that action).
+    action: Mapped[str] = mapped_column(String(16), default="ansible")
     # Targets: comma-separated server ids, or empty = all enabled servers.
     server_ids: Mapped[str] = mapped_column(String(512), default="")
     # Comma-separated plugin keys, or empty = all enabled plugins.
@@ -407,6 +411,9 @@ class Discovery(Base):
     proxmox_vmid: Mapped[str | None] = mapped_column(String(16))
     guest_type: Mapped[str | None] = mapped_column(String(8))  # lxc | qemu
     status_text: Mapped[str | None] = mapped_column(String(32))  # running | stopped
+    # IP of a host found by the network scan (source='network'); the proxmox_*
+    # fields stay NULL for that source. Confirming registers it as an ssh host.
+    address: Mapped[str | None] = mapped_column(String(64))
 
     # name_change fields (the host is already known)
     server_id: Mapped[int | None] = mapped_column(
@@ -428,6 +435,25 @@ class Setting(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
     value_type: Mapped[str] = mapped_column(String(16), default="str")
+
+
+class Subnet(Base):
+    """A network range the panel sweeps for unmanaged SSH hosts.
+
+    ``spec`` holds a single nmap-style target (CIDR ``192.168.0.0/24``, wildcard
+    ``192.168.0.*``, or last-octet range ``192.168.0.1-50``). The network scan
+    (see :mod:`app.netscan`) expands every enabled subnet, probes TCP 22, and
+    records reachable IPs as ``new_host`` discoveries (source ``network``).
+    """
+
+    __tablename__ = "subnets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str | None] = mapped_column(String(64))  # optional friendly name
+    spec: Mapped[str] = mapped_column(String(64), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class AuditLog(Base):

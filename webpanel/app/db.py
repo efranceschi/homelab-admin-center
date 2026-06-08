@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import config
 from .models import Base
 
-SCHEMA_VERSION = "11"
+SCHEMA_VERSION = "12"
 
 # Columns added after the initial release, keyed by table. PRAGMA table_info is
 # the source of truth, so applying these is idempotent (only missing columns are
@@ -46,6 +46,8 @@ _ADDITIVE_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
     "schedules": [
         ("group_ids", "VARCHAR(512)"),
+        # v12: network-scan schedules reuse this table; pre-v12 rows are ansible.
+        ("action", "VARCHAR(16) NOT NULL DEFAULT 'ansible'"),
     ],
     # discovered_hosts was renamed to discoveries (see _migrate_pre_create) and
     # generalized from "new hosts only" to any discovery kind. These columns are
@@ -58,6 +60,8 @@ _ADDITIVE_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("new_name", "VARCHAR(128)"),
         ("resolved_at", "DATETIME"),
         ("guest_type", "VARCHAR(8)"),
+        # v12: IP of a host found by the network scan (source='network').
+        ("address", "VARCHAR(64)"),
     ],
 }
 

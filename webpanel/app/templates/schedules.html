@@ -39,10 +39,11 @@
     <tbody>
     {% for s in schedules %}
       <tr>
-        <td>{{ s.name }}</td>
+        <td>{{ s.name }}
+          {% if s.action == 'network_scan' %}<span class="badge bg-info-subtle text-info-emphasis ms-1">network scan</span>{% endif %}</td>
         <td>{% if s.kind == 'interval' %}every {{ s.interval_minutes }} min
             {% else %}daily {{ s.daily_time }}{% endif %}</td>
-        <td>{{ s.mode }}</td>
+        <td>{{ 'scan' if s.action == 'network_scan' else s.mode }}</td>
         <td class="small">{{ s.next_run_at.strftime('%Y-%m-%d %H:%M UTC') if s.next_run_at else '—' }}</td>
         <td>
           <form method="post" action="/schedules/{{ s.id }}/toggle" class="d-inline">
@@ -57,8 +58,8 @@
             <button type="button" class="act-btn act-btn-primary"
                     data-action="/schedules/{{ s.id }}/run"
                     data-title="Run schedule now" data-ok="Run now"
-                    data-ok-class="{{ 'btn-warning' if s.mode == 'apply' else 'btn-primary' }}"
-                    data-confirm="Run “{{ s.name }}” now ({{ s.mode }})? This does not change its next scheduled run."
+                    data-ok-class="{{ 'btn-warning' if s.action == 'ansible' and s.mode == 'apply' else 'btn-primary' }}"
+                    data-confirm="Run “{{ s.name }}” now ({{ 'network scan' if s.action == 'network_scan' else s.mode }})? This does not change its next scheduled run."
                     title="Run now" aria-label="Run schedule {{ s.name }} now">{{ icon('play', 16) }}</button>
             <button type="button" class="act-btn act-btn-danger"
                     data-action="/schedules/{{ s.id }}/delete"
@@ -89,6 +90,11 @@
           <div class="col-md-6">
             <div class="mb-2"><label class="form-label">Name</label>
               <input class="form-control form-control-sm" name="name" required></div>
+            <div class="mb-2"><label class="form-label">Action</label>
+              <select class="form-select form-select-sm" name="action" id="sched-action">
+                <option value="ansible">config run (check / apply)</option>
+                <option value="network_scan">network scan (subnets)</option>
+              </select></div>
             <div class="mb-2"><label class="form-label">Kind</label>
               <select class="form-select form-select-sm" name="kind"
                       onchange="document.getElementById('k-interval').style.display=this.value=='interval'?'block':'none';
@@ -100,13 +106,16 @@
               <input class="form-control form-control-sm" name="daily_time" value="03:30"></div>
             <div id="k-interval" class="mb-2" style="display:none"><label class="form-label">Interval (minutes)</label>
               <input class="form-control form-control-sm" name="interval_minutes" value="60"></div>
-            <div class="mb-2"><label class="form-label">Mode</label>
+            <div class="mb-2 ansible-only"><label class="form-label">Mode</label>
               <select class="form-select form-select-sm" name="mode">
                 <option value="apply">apply</option>
                 <option value="check">check (dry-run)</option>
               </select></div>
+            <p class="text-muted small netscan-only" style="display:none">Sweeps every
+              enabled subnet (Settings → Network scan) for SSH-reachable hosts and
+              files them under Discovered. Targets, mode and plugins don't apply.</p>
           </div>
-          <div class="col-md-6">
+          <div class="col-md-6 ansible-only">
             <div class="mb-2"><label class="form-label">Hosts <span class="text-muted small">(none = all enabled)</span></label>
               <div class="border rounded p-2" style="max-height:140px;overflow:auto">
                 {% for s in servers %}<div class="form-check">
@@ -137,4 +146,19 @@
   </div>
 </div>
 {% endif %}
+<script>
+  // Toggle the ansible-only vs network-scan fields in the New schedule modal.
+  (function () {
+    const sel = document.getElementById('sched-action');
+    if (!sel) return;
+    const modal = document.getElementById('add-schedule-modal');
+    function sync() {
+      const scan = sel.value === 'network_scan';
+      modal.querySelectorAll('.ansible-only').forEach(e => e.style.display = scan ? 'none' : '');
+      modal.querySelectorAll('.netscan-only').forEach(e => e.style.display = scan ? 'block' : 'none');
+    }
+    sel.addEventListener('change', sync);
+    sync();
+  })();
+</script>
 {% endblock %}

@@ -356,8 +356,21 @@ def add_host(
     if vmid:
         _mark_virt_host(db, srv.parent_server_id)
         _confirm_discovery_for_vmid(db, vmid, from_discovery)
+    elif from_discovery.strip():
+        # Completion of a network discovery (no vmid): resolve it by id.
+        _confirm_discovery_by_id(db, from_discovery)
     db.add(AuditLog(user_id=user.id, action="host.add", target=srv.name))
     return RedirectResponse("/hosts", status_code=303)
+
+
+def _confirm_discovery_by_id(db: Session, disc_id: str) -> None:
+    """Mark a pending discovery confirmed by its explicit id (network find path)."""
+    if not disc_id.strip().isdigit():
+        return
+    disc = db.get(Discovery, int(disc_id))
+    if disc is not None and disc.status == "pending":
+        disc.status = "confirmed"
+        disc.resolved_at = utcnow()
 
 
 def _confirm_discovery_for_vmid(db: Session, vmid: str, disc_id: str) -> None:

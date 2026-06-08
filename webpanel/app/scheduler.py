@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from . import config, discovery, housekeeping
+from . import config, discovery, housekeeping, netscan
 from .ansible_layer import headless
 from .db import init_engine, session_scope
 from .models import Plugin, Schedule, Server
@@ -165,17 +165,27 @@ def _tick() -> None:
             if nra.tzinfo is None:
                 nra = nra.replace(tzinfo=timezone.utc)
             if nra <= now:
-                targets = _resolve_targets(db, sched)
-                plugins = _resolve_plugins(db, sched)
-                print(f"[scheduler] firing '{sched.name}' ({sched.mode})", flush=True)
-                if targets and plugins:
-                    # One job per host: keeps each host's config_state tied to its
-                    # own run, consistent with panel-triggered fan-out.
-                    for sid in targets:
-                        headless.run_now(
-                            db, server_ids=[sid], plugin_ids=plugins,
-                            mode=sched.mode, triggered_by=sched.created_by,
-                        )
+                if sched.action == "network_scan":
+                    # Sweep the registered subnets; not a per-host ansible run, so
+                    # it ignores targets/plugins/mode and opens its own session.
+                    print(f"[scheduler] firing '{sched.name}' (network_scan)", flush=True)
+                    try:
+                        stats = netscan.run_network_scan()
+                        print(f"[scheduler] network scan {stats}", flush=True)
+                    except Exception as exc:
+                        print(f"[scheduler] network scan error: {exc}", flush=True)
+                else:
+                    targets = _resolve_targets(db, sched)
+                    plugins = _resolve_plugins(db, sched)
+                    print(f"[scheduler] firing '{sched.name}' ({sched.mode})", flush=True)
+                    if targets and plugins:
+                        # One job per host: keeps each host's config_state tied to
+                        # its own run, consistent with panel-triggered fan-out.
+                        for sid in targets:
+                            headless.run_now(
+                                db, server_ids=[sid], plugin_ids=plugins,
+                                mode=sched.mode, triggered_by=sched.created_by,
+                            )
                 sched.last_run_at = now
                 sched.next_run_at = compute_next_run(sched, datetime.now(timezone.utc))
 

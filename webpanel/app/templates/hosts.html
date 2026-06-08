@@ -89,7 +89,7 @@
      each awaiting a confirm/ignore decision. Filtered by lifecycle status. #}
   <div class="tab-pane fade" id="tab-discovered" role="tabpanel">
     <div class="d-flex justify-content-between align-items-center p-2 px-3 border-bottom">
-      <span class="text-muted small">Changes detected across the fleet — new hosts and hostname changes. Scans run every 24h.</span>
+      <span class="text-muted small">Changes detected across the fleet — new hosts (Proxmox &amp; network scan) and hostname changes. Proxmox runs every 24h; network scan runs daily and per the <a href="/settings#netscan">subnets</a> you register.</span>
       {% if current_role == 'admin' %}
       <form method="post" action="/hosts/discover" class="d-inline m-0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -116,6 +116,11 @@
             {% if d.kind == 'name_change' %}
               <span class="badge bg-info-subtle text-info-emphasis me-1">Name change</span>
               Host name changed: <code>{{ d.old_name }}</code> → <code>{{ d.new_name }}</code>
+            {% elif d.source == 'network' %}
+              <span class="badge bg-primary-subtle text-primary-emphasis me-1">New host</span>
+              <span class="badge bg-light text-dark border me-1" title="Found by network scan (SSH reachable)">SSH</span>
+              {{ d.name or d.address }}
+              {% if d.address and d.name and d.name != d.address %}<span class="text-muted small">· {{ d.address }}</span>{% endif %}
             {% else %}
               <span class="badge bg-primary-subtle text-primary-emphasis me-1">New host</span>
               {% if d.guest_type == 'qemu' %}<span class="badge bg-light text-dark border me-1" title="QEMU virtual machine">VM</span>{% elif d.guest_type %}<span class="badge bg-light text-dark border me-1" title="LXC container">CT</span>{% endif %}
@@ -130,7 +135,16 @@
           <td class="text-end">
             {% if d.status == 'pending' and current_role == 'admin' %}
             <span class="act-group">
-              {% if d.kind == 'new_host' and d.guest_type == 'qemu' %}
+              {% if d.kind == 'new_host' and d.source == 'network' %}
+              {# A network find is reached over ssh; confirming opens the Add-host
+                 SSH modal prefilled with the IP so the admin picks a credential. #}
+              <button type="button" class="act-btn act-btn-primary net-confirm"
+                      data-bs-toggle="modal" data-bs-target="#add-host-modal"
+                      data-net-name="{{ d.name or d.address }}"
+                      data-net-address="{{ d.address or '' }}"
+                      data-net-disc="{{ d.id }}"
+                      title="Connect over SSH" aria-label="Connect over SSH">{{ icon('check', 16) }}</button>
+              {% elif d.kind == 'new_host' and d.guest_type == 'qemu' %}
               {# A VM has no `pct exec`; confirming opens the Add-host SSH modal
                  prefilled so the admin supplies the address/credential. #}
               <button type="button" class="act-btn act-btn-primary vm-confirm"
@@ -196,7 +210,7 @@
 
         <div class="ct" id="ct-ssh" style="display:none">
           <div class="mb-2"><label class="form-label">Address</label>
-            <input class="form-control form-control-sm" name="address"></div>
+            <input class="form-control form-control-sm" name="address" id="host-address"></div>
           <div class="mb-2"><label class="form-label">Port</label>
             <input class="form-control form-control-sm" name="port" placeholder="22"></div>
           <div class="mb-2"><label class="form-label">SSH user</label>
@@ -289,6 +303,7 @@
     const nameInp = document.getElementById('host-name');
     const allCb = document.getElementById('pct-all');
     const title = document.getElementById('add-host-title');
+    const addrInp = document.getElementById('host-address');
     const vm = {
       vmid: document.getElementById('vm-vmid'),
       node: document.getElementById('vm-node'),
@@ -310,6 +325,7 @@
 
     function clearVm() {
       vm.vmid.value = ''; vm.node.value = ''; vm.type.value = ''; vm.disc.value = '';
+      if (addrInp) addrInp.value = '';
       if (title) title.textContent = 'Add host';
     }
 
@@ -323,6 +339,15 @@
         vm.type.value = 'qemu';
         vm.disc.value = btn.dataset.vmDisc || '';
         if (title) title.textContent = 'Connect VM over SSH';
+      } else if (btn && btn.classList.contains('net-confirm')) {
+        // A network discovery: register it as a plain ssh host at its IP. No
+        // vmid/node link, just the address and the discovery id to resolve.
+        clearVm();
+        typeSel.value = 'ssh';
+        nameInp.value = btn.dataset.netName || '';
+        if (addrInp) addrInp.value = btn.dataset.netAddress || '';
+        vm.disc.value = btn.dataset.netDisc || '';
+        if (title) title.textContent = 'Connect over SSH';
       } else {
         clearVm();
       }

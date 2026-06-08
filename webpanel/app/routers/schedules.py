@@ -46,17 +46,22 @@ async def add_schedule(
 ):
     form = await request.form()
     kind = form.get("kind", "daily")
+    action = form.get("action", "ansible")
+    if action not in ("ansible", "network_scan"):
+        action = "ansible"
     sched = Schedule(
         name=(form.get("name") or "Schedule").strip(),
         enabled=True,
         kind=kind,
+        action=action,
         interval_minutes=int(form["interval_minutes"]) if kind == "interval"
         and str(form.get("interval_minutes", "")).isdigit() else None,
         daily_time=(form.get("daily_time") or "03:30") if kind == "daily" else None,
-        mode=form.get("mode", "apply"),
-        server_ids=",".join(form.getlist("servers")),
-        plugin_ids=",".join(form.getlist("plugins")),
-        group_ids=",".join(form.getlist("groups")),
+        # A network scan ignores targets/plugins/mode; leave them at defaults.
+        mode=form.get("mode", "apply") if action == "ansible" else "check",
+        server_ids=",".join(form.getlist("servers")) if action == "ansible" else "",
+        plugin_ids=",".join(form.getlist("plugins")) if action == "ansible" else "",
+        group_ids=",".join(form.getlist("groups")) if action == "ansible" else "",
         created_by=user.id,
     )
     db.add(sched)
@@ -92,6 +97,14 @@ async def run_schedule(
     is left untouched: a one-off run must not shift the schedule."""
     sched = db.get(Schedule, schedule_id)
     if sched is None:
+        return RedirectResponse("/schedules", status_code=303)
+    if sched.action == "network_scan":
+        import asyncio
+
+        from .. import netscan
+
+        await asyncio.to_thread(netscan.run_network_scan)
+        db.add(AuditLog(user_id=user.id, action="schedule.run", target=sched.name))
         return RedirectResponse("/schedules", status_code=303)
     targets = _resolve_targets(db, sched)
     plugins = _resolve_plugins(db, sched)

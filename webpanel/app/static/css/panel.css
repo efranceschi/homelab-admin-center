@@ -449,7 +449,8 @@ hr { border-color: var(--border-subtle); opacity: 1; }
 .conn-local   { background: var(--fill-idle) !important; color: var(--text-secondary) !important; border: 1px solid var(--status-idle); }
 .conn-ssh     { background: var(--fill-info) !important; color: var(--accent-secondary) !important; border: 1px solid var(--accent-secondary); }
 .conn-proxmox { background: var(--fill-warn) !important; color: var(--status-warn) !important; border: 1px solid var(--status-warn); }
-.conn-local, .conn-ssh, .conn-proxmox { font-family: var(--fonts-mono); font-weight: 500; border-radius: 3px; }
+.conn-network { background: var(--fill-info) !important; color: var(--accent-secondary) !important; border: 1px solid var(--accent-secondary); }
+.conn-local, .conn-ssh, .conn-proxmox, .conn-network { font-family: var(--fonts-mono); font-weight: 500; border-radius: 3px; }
 
 .chip { font-weight: 500; padding: .35em .6em; }
 

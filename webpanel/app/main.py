@@ -43,19 +43,31 @@ def _ensure_default_schedules(db) -> None:
     """
     from .models import Schedule, Setting
 
-    if db.get(Setting, "drift_schedule_seeded") is not None:
-        return
-    db.add(Schedule(
-        name="drift-check",
-        kind="daily",
-        daily_time="04:30",
-        mode="check",
-        server_ids="",   # all enabled hosts
-        plugin_ids="",   # all enabled plugins
-        enabled=True,
-        created_by=None,
-    ))
-    db.add(Setting(key="drift_schedule_seeded", value="1", value_type="str"))
+    if db.get(Setting, "drift_schedule_seeded") is None:
+        db.add(Schedule(
+            name="drift-check",
+            kind="daily",
+            daily_time="04:30",
+            mode="check",
+            server_ids="",   # all enabled hosts
+            plugin_ids="",   # all enabled plugins
+            enabled=True,
+            created_by=None,
+        ))
+        db.add(Setting(key="drift_schedule_seeded", value="1", value_type="str"))
+
+    # A daily network scan, so registered subnets are swept out of the box. A
+    # no-op until the user adds a subnet; same one-shot guard as drift-check.
+    if db.get(Setting, "netscan_schedule_seeded") is None:
+        db.add(Schedule(
+            name="network-scan",
+            kind="daily",
+            daily_time="04:45",
+            action="network_scan",
+            enabled=True,
+            created_by=None,
+        ))
+        db.add(Setting(key="netscan_schedule_seeded", value="1", value_type="str"))
 
 
 def _write_pidfile() -> None:
