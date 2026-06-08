@@ -6,7 +6,7 @@
 #   ansible-vault create  inventory/group_vars/all/vault.yml
 #   ansible-vault edit     inventory/group_vars/all/vault.yml
 #
-# The vault password is read from /etc/lxc-ansible/vault-pass (mode 0600) and
+# The vault password is read from /etc/hack/vault-pass (mode 0600) and
 # is NEVER committed. This example file (plaintext placeholders) is safe to
 # commit; do not put real secrets here.
 # ============================================================================

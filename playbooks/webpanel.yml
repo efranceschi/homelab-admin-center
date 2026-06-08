@@ -4,7 +4,7 @@
 # daily cron run: the panel selects functionality with --tags, targets hosts
 # with --limit, and layers configuration via --extra-vars. site.yml is never
 # touched, so the cron path keeps working unchanged.
-- name: lxc-ansible web panel run
+- name: hack web panel run
   hosts: all
   gather_facts: true
   become: false # pct exec is already root; ssh/local can opt in via become if needed.
