@@ -33,6 +33,48 @@
           {{ ansible_fqdn | default('') }}
       tags: [facts, always]
 
+    # Curated, STABLE facts for the per-host inventory (panel Inventory tab).
+    # Assembled here so cpu_model/disk_mounts can use loop/regex helpers, then
+    # base64-encoded below to survive debug's line-wrapping/ANSI. Volatile facts
+    # (uptime, free mem, available disk, load, current time) are deliberately
+    # excluded so change-tracking only fires on real changes.
+    - name: Assemble panel inventory facts
+      ansible.builtin.set_fact:
+        _panel_inv:
+          hostname: "{{ ansible_hostname | default('') }}"
+          fqdn: "{{ ansible_fqdn | default('') }}"
+          distribution: "{{ ansible_distribution | default('') }}"
+          distribution_version: "{{ ansible_distribution_version | default('') }}"
+          distribution_release: "{{ ansible_distribution_release | default('') }}"
+          kernel: "{{ ansible_kernel | default('') }}"
+          architecture: "{{ ansible_architecture | default('') }}"
+          vcpus: "{{ ansible_processor_vcpus | default('') }}"
+          memtotal_mb: "{{ ansible_memtotal_mb | default('') }}"
+          virtualization_type: "{{ ansible_virtualization_type | default('') }}"
+          virtualization_role: "{{ ansible_virtualization_role | default('') }}"
+          python_version: "{{ ansible_python_version | default('') }}"
+          pkg_mgr: "{{ ansible_pkg_mgr | default('') }}"
+          timezone: "{{ ansible_date_time.tz | default('') }}"
+          default_ipv4: "{{ ansible_default_ipv4.address | default('') }}"
+          macaddress: "{{ ansible_default_ipv4.macaddress | default('') }}"
+          all_ipv4: "{{ ansible_all_ipv4_addresses | default([]) | sort | join(', ') }}"
+          # Pick the processor element that looks like a model name (contains a
+          # space); index of the model varies across Ansible/virt types.
+          cpu_model: >-
+            {{ (ansible_processor | default([]) | select('search', ' ') | list | first)
+               | default(ansible_processor | default([]) | join(' '), true) | trim }}
+          # Per-mount provisioned size only (size_total); size_available is volatile.
+          disk_mounts: >-
+            {% for m in ansible_mounts | default([]) | sort(attribute='mount')
+            -%}{{ m.mount }} ({{ (m.size_total / 1073741824) | round(1) }} GB)
+            {%- if not loop.last %}, {% endif %}{% endfor %}
+      tags: [facts, always]
+
+    - name: Report inventory facts (panel facts probe)
+      ansible.builtin.debug:
+        msg: "PANEL_FACTS {{ inventory_hostname }} :: {{ _panel_inv | to_json | b64encode }}"
+      tags: [facts, always]
+
     - name: Detect reboot requirement
       ansible.builtin.stat:
         path: /var/run/reboot-required

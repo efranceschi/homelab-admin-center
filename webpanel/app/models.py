@@ -89,6 +89,10 @@ class Server(Base):
         cascade="all, delete-orphan",
         order_by="HostEvent.created_at.desc()",
     )
+    inventory: Mapped[list["HostInventory"]] = relationship(
+        cascade="all, delete-orphan",
+        order_by="HostInventory.key",
+    )
 
 
 class HostGroup(Base):
@@ -257,6 +261,32 @@ class HostEvent(Base):
     message: Mapped[str] = mapped_column(Text, default="")
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class HostInventory(Base):
+    """One curated fact per host, with last-change tracking (no full history).
+
+    Populated from the playbook's ``PANEL_FACTS`` probe on every run. Only the
+    LAST change is kept: ``previous_value`` + ``changed_at`` are set when (and
+    only when) the gathered value actually differs from the stored one. STABLE
+    facts only — volatile ones (uptime, free mem, …) are excluded upstream so a
+    value never churns spuriously per run.
+    """
+
+    __tablename__ = "host_inventory"
+    __table_args__ = (UniqueConstraint("server_id", "key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    server_id: Mapped[int] = mapped_column(
+        ForeignKey("servers.id", ondelete="CASCADE"), nullable=False
+    )
+    key: Mapped[str] = mapped_column(String(64), nullable=False)  # e.g. "kernel"
+    value: Mapped[str] = mapped_column(Text, default="")  # current value
+    previous_value: Mapped[str | None] = mapped_column(Text)  # value before last change
+    changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow  # last seen/refreshed
+    )
 
 
 class Schedule(Base):

@@ -5,6 +5,9 @@ executor so both update host state identically.
 """
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 import re
 
 from ..ansi import strip_ansi
@@ -57,6 +60,34 @@ def parse_hostnames(text: str) -> dict[str, str]:
             m = re.search(r"PANEL_HOSTNAME\s+(\S+)\s+::\s+(\S*)\s+::", line)
             if m and m.group(2):
                 out[m.group(1)] = m.group(2)
+    return out
+
+
+_FACTS_RE = re.compile(r"PANEL_FACTS\s+(\S+)\s+::\s+([A-Za-z0-9+/=]+)")
+
+
+def parse_facts(text: str) -> dict[str, dict]:
+    """Return ``{inventory_host: {fact_key: value}}`` from the facts-probe marker.
+
+    Mirrors :func:`parse_hostnames`: the playbook emits one
+    ``PANEL_FACTS <inventory_host> :: <base64(json)>`` line per host. Base64
+    keeps the payload a single contiguous, space/quote/newline-free token so the
+    regex survives debug's line-wrapping and ANSI coloring. A wrapped or garbled
+    line that fails to decode is skipped, never raised (old values are retained).
+    """
+    out: dict[str, dict] = {}
+    for line in strip_ansi(text).splitlines():
+        if "PANEL_FACTS" not in line:
+            continue
+        m = _FACTS_RE.search(line)
+        if not m:
+            continue
+        try:
+            payload = json.loads(base64.b64decode(m.group(2)))
+        except (ValueError, TypeError, binascii.Error, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            out[m.group(1)] = payload
     return out
 
 

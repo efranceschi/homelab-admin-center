@@ -19,6 +19,7 @@ from ..models import (
     Credential,
     Discovery,
     HostEvent,
+    HostInventory,
     HostState,
     Job,
     Plugin,
@@ -182,12 +183,19 @@ def host_detail(
         .order_by(HostEvent.created_at.desc())
         .limit(200)
     ).all()
+    inventory = {
+        r.key: r
+        for r in db.scalars(
+            select(HostInventory).where(HostInventory.server_id == server_id)
+        ).all()
+    }
     return render(
         request,
         "host_detail.html",
         server=srv,
         state=state,
         events=events,
+        inventory=inventory,
     )
 
 

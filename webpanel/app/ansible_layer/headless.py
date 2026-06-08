@@ -160,6 +160,9 @@ def run_now(
     recap = results.parse_recap(text)
     reboot = results.parse_reboot(text)
     _reconcile_probed_hostnames(db, servers, text)
+    from .. import inventory
+
+    inventory.store_facts(db, servers, results.parse_facts(text))
     finished = datetime.now(timezone.utc)
     norm_mode = "apply" if mode == "apply" else "check"
     job.status = "success" if rc == 0 else "failed"

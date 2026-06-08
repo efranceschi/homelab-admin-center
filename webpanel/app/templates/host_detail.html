@@ -16,7 +16,26 @@
   <li class="breadcrumb-item active">{{ server.name }}</li>
 </ol></nav>
 
-<div class="card mb-4">
+<ul class="nav nav-tabs" id="hostTab" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="tab-overview-btn" data-bs-toggle="tab" data-bs-target="#tab-overview"
+            type="button" role="tab">{{ icon('server', 14) }} Overview</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-inventory-btn" data-bs-toggle="tab" data-bs-target="#tab-inventory"
+            type="button" role="tab">{{ icon('activity', 14) }} Inventory
+      <span class="badge bg-secondary">{{ inventory|length }}</span></button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-history-btn" data-bs-toggle="tab" data-bs-target="#tab-history"
+            type="button" role="tab">{{ icon('refresh', 14) }} History
+      <span class="badge bg-secondary">{{ events|length }}</span></button>
+  </li>
+</ul>
+<div class="tab-content border border-top-0 rounded-bottom p-3 mb-4">
+
+<div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
+<div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>Host</span>
     {% if current_role == 'admin' %}
@@ -60,7 +79,54 @@
     </dl>
   </div>
 </div>
+</div>{# /tab-overview #}
 
+<div class="tab-pane fade" id="tab-inventory" role="tabpanel">
+{% set inv_groups = [
+  ('Identity', [('hostname','Hostname'),('fqdn','FQDN')]),
+  ('Operating system', [('distribution','Distribution'),('distribution_version','Version'),('distribution_release','Release'),('kernel','Kernel'),('architecture','Architecture')]),
+  ('Hardware', [('cpu_model','CPU model'),('vcpus','vCPUs'),('memtotal_mb','Memory (MB)'),('disk_mounts','Disk / mounts')]),
+  ('Network', [('default_ipv4','Primary IPv4'),('macaddress','MAC address'),('all_ipv4','All IPv4')]),
+  ('Runtime', [('virtualization_type','Virtualization type'),('virtualization_role','Virtualization role'),('python_version','Python'),('pkg_mgr','Package manager'),('timezone','Timezone')])
+] %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Inventory</span>
+    {% set _last = inventory.values()|map(attribute='updated_at')|select|max if inventory else None %}
+    {% if _last %}<span class="text-muted small">collected {{ _last.strftime('%Y-%m-%d %H:%M UTC') }}</span>{% endif %}
+  </div>
+  {% if inventory %}
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th style="width:18rem">Item</th><th>Value</th><th>Last change</th></tr></thead>
+    <tbody>
+    {% for group, items in inv_groups %}
+      {% set present = items|selectattr('0', 'in', inventory)|list %}
+      {% if present %}
+      <tr class="table-light"><td colspan="3" class="small text-muted fw-bold">{{ group }}</td></tr>
+      {% for key, label in present %}
+        {% set row = inventory[key] %}
+        <tr>
+          <td class="text-muted">{{ label }}</td>
+          <td class="mono">{{ row.value or '—' }}</td>
+          <td class="small text-muted">
+            {% if row.changed_at %}
+              {{ row.changed_at.strftime('%Y-%m-%d %H:%M UTC') }}
+              {% if row.previous_value %}<span class="st st-warn">was {{ row.previous_value }}</span>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <div class="card-body text-muted">No inventory yet — run a check or apply on this host.</div>
+  {% endif %}
+</div>
+</div>{# /tab-inventory #}
+
+<div class="tab-pane fade" id="tab-history" role="tabpanel">
 <div class="card">
   <div class="card-header">History <span class="text-muted small">(latest {{ events|length }})</span></div>
   <div class="table-responsive"><table class="table table-sm align-middle mb-0">
@@ -79,4 +145,7 @@
     </tbody>
   </table></div>
 </div>
+</div>{# /tab-history #}
+
+</div>{# /tab-content #}
 {% endblock %}

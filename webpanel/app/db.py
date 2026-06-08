@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import config
 from .models import Base
 
-SCHEMA_VERSION = "7"
+SCHEMA_VERSION = "8"
 
 # Columns added after the initial release, keyed by table. PRAGMA table_info is
 # the source of truth, so applying these is idempotent (only missing columns are
