@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from . import config, housekeeping
+from . import config, discovery, housekeeping
 from .ansible_layer import headless
 from .db import init_engine, session_scope
 from .models import Plugin, Schedule, Server
@@ -29,6 +29,9 @@ from .plugins import registry
 POLL_SECONDS = 30
 # How often to run log/run-dir housekeeping (independent of any schedule).
 HOUSEKEEP_SECONDS = 3600
+# How often to scan for unmanaged hosts (independent of any schedule). Also runs
+# once on startup, so a fresh deploy populates the discovered-hosts table soon.
+DISCOVERY_SECONDS = 86400
 PIDFILE = config.RUN_DIRS / "scheduler.pid"
 
 
@@ -103,6 +106,7 @@ def run_scheduler() -> None:
     signal.signal(signal.SIGINT, _term)
 
     last_housekeep = 0.0  # 0 => run once on the first iteration
+    last_discovery = 0.0  # 0 => run once on the first iteration
     while not running["stop"]:
         try:
             _tick()
@@ -117,6 +121,13 @@ def run_scheduler() -> None:
                     print(f"[scheduler] housekeeping {stats}", flush=True)
             except Exception as exc:
                 print(f"[scheduler] housekeeping error: {exc}", flush=True)
+        if now_mono - last_discovery >= DISCOVERY_SECONDS:
+            last_discovery = now_mono
+            try:
+                stats = discovery.run_discovery()
+                print(f"[scheduler] discovery {stats}", flush=True)
+            except Exception as exc:
+                print(f"[scheduler] discovery error: {exc}", flush=True)
         for _ in range(POLL_SECONDS):
             if running["stop"]:
                 break

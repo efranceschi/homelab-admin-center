@@ -1,6 +1,7 @@
 """Host (server) and credential management."""
 from __future__ import annotations
 
+import asyncio
 import json
 import socket
 
@@ -9,12 +10,22 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import crypto, proxmox
+from .. import crypto, discovery, proxmox
 from ..ansible_layer.service import JobBusyError, start_jobs
 from ..auth import current_user, require_admin, verify_csrf
 from ..db import db_dependency
 from ..jobs import manager
-from ..models import AuditLog, Credential, HostState, Job, Plugin, Server, User
+from ..models import (
+    AuditLog,
+    Credential,
+    DiscoveredHost,
+    HostEvent,
+    HostState,
+    Job,
+    Plugin,
+    Server,
+    User,
+)
 from ..templating import render, templates
 
 router = APIRouter(prefix="/hosts")
@@ -76,6 +87,10 @@ def list_hosts(
     db: Session = Depends(db_dependency),
     user: User = Depends(current_user),
 ):
+    # Keep managed Proxmox host names in lockstep with their containers: one
+    # pct list serves both the rename sync and the add-host picker below.
+    containers = proxmox.list_containers()
+    discovery.reconcile_proxmox_names(db, containers)
     servers = db.scalars(select(Server).order_by(Server.name)).all()
     credentials = db.scalars(select(Credential).order_by(Credential.name)).all()
     states = {st.server_id: st for st in db.scalars(select(HostState)).all()}
@@ -84,7 +99,12 @@ def list_hosts(
     registered = {
         s.proxmox_vmid for s in servers if s.connection_type == "proxmox" and s.proxmox_vmid
     }
-    available = [c for c in proxmox.list_containers() if c["vmid"] not in registered]
+    available = [c for c in containers if c["vmid"] not in registered]
+    discovered = db.scalars(
+        select(DiscoveredHost)
+        .where(DiscoveredHost.dismissed.is_(False))
+        .order_by(DiscoveredHost.last_seen.desc())
+    ).all()
     ood_count = sum(
         1
         for s in servers
@@ -101,6 +121,8 @@ def list_hosts(
         live_status=_live_host_status(db),
         pct_containers=available,
         pct_available=proxmox.pct_path() is not None,
+        discovered=discovered,
+        discovered_count=len(discovered),
         ood_count=ood_count,
     )
 
@@ -129,6 +151,33 @@ def host_states(
             else "unknown"
         )
     return JSONResponse({"busy": bool(live), "cells": cells, "states": drift})
+
+
+@router.get("/{server_id}")
+def host_detail(
+    server_id: int,
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(current_user),
+):
+    """Per-host detail page: connection, config state, and a history timeline."""
+    srv = db.get(Server, server_id)
+    if srv is None:
+        return RedirectResponse("/hosts", status_code=303)
+    state = db.scalar(select(HostState).where(HostState.server_id == server_id))
+    events = db.scalars(
+        select(HostEvent)
+        .where(HostEvent.server_id == server_id)
+        .order_by(HostEvent.created_at.desc())
+        .limit(200)
+    ).all()
+    return render(
+        request,
+        "host_detail.html",
+        server=srv,
+        state=state,
+        events=events,
+    )
 
 
 @router.post("/check-all", dependencies=[Depends(verify_csrf)])
@@ -289,26 +338,45 @@ def _add_proxmox_hosts(
     existing = db.scalars(select(Server)).all()
     taken_names = {s.name for s in existing}
     taken_vmids = {s.proxmox_vmid for s in existing if s.connection_type == "proxmox"}
-    node = socket.gethostname()
 
     for c in selected:
-        vmid = c["vmid"]
-        if not vmid or vmid in taken_vmids:
-            continue  # already registered — skip
-        base = (c.get("name") or "").strip() or f"ct{vmid}"
-        hostname = base if base not in taken_names else f"{base}-{vmid}"
-        db.add(Server(
-            name=hostname,
-            connection_type="proxmox",
-            proxmox_node=node,
-            proxmox_vmid=vmid,
-            enabled=True,
-        ))
-        db.add(AuditLog(user_id=user.id, action="host.add", target=hostname))
-        taken_names.add(hostname)
-        taken_vmids.add(vmid)
+        _create_proxmox_server(
+            db, user, c["vmid"], c.get("name"), taken_names, taken_vmids
+        )
 
     return RedirectResponse("/hosts", status_code=303)
+
+
+def _create_proxmox_server(
+    db: Session,
+    user: User,
+    vmid: str,
+    name: str | None,
+    taken_names: set[str],
+    taken_vmids: set[str],
+) -> Server | None:
+    """Register one Proxmox container as a host, naming it after the container.
+
+    Falls back to ``ct{vmid}`` and a ``-{vmid}`` suffix on name collisions, and
+    skips (returns None) when ``vmid`` is missing or already registered. Mutates
+    ``taken_names``/``taken_vmids`` so a batch caller stays collision-free.
+    """
+    if not vmid or vmid in taken_vmids:
+        return None
+    base = (name or "").strip() or f"ct{vmid}"
+    hostname = base if base not in taken_names else f"{base}-{vmid}"
+    srv = Server(
+        name=hostname,
+        connection_type="proxmox",
+        proxmox_node=socket.gethostname(),
+        proxmox_vmid=vmid,
+        enabled=True,
+    )
+    db.add(srv)
+    db.add(AuditLog(user_id=user.id, action="host.add", target=hostname))
+    taken_names.add(hostname)
+    taken_vmids.add(vmid)
+    return srv
 
 
 @router.post("/{server_id}/delete", dependencies=[Depends(verify_csrf)])
@@ -334,6 +402,61 @@ def toggle_host(
     if srv:
         srv.enabled = not srv.enabled
     return RedirectResponse("/hosts", status_code=303)
+
+
+# --------------------------------------------------------------------------- #
+# Discovery
+# --------------------------------------------------------------------------- #
+@router.post("/discover", dependencies=[Depends(verify_csrf)])
+async def discover_hosts(
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    """Run a discovery scan now (also runs every 24h via the scheduler).
+
+    Off-loaded to a thread because ``pct list`` shells out and can block for a
+    few seconds; ``run_discovery`` manages its own session."""
+    stats = await asyncio.to_thread(discovery.run_discovery)
+    db.add(AuditLog(
+        user_id=user.id, action="host.discover", target=f"new={stats['new']}"
+    ))
+    return _stay(request)
+
+
+@router.post("/discovered/{disc_id}/add", dependencies=[Depends(verify_csrf)])
+def add_discovered_host(
+    disc_id: int,
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    """Confirm a discovered container, registering it as a managed host."""
+    disc = db.get(DiscoveredHost, disc_id)
+    if disc is None:
+        return _stay(request)
+    existing = db.scalars(select(Server)).all()
+    taken_names = {s.name for s in existing}
+    taken_vmids = {s.proxmox_vmid for s in existing if s.connection_type == "proxmox"}
+    _create_proxmox_server(
+        db, user, disc.proxmox_vmid, disc.name, taken_names, taken_vmids
+    )
+    db.delete(disc)
+    return _stay(request)
+
+
+@router.post("/discovered/{disc_id}/dismiss", dependencies=[Depends(verify_csrf)])
+def dismiss_discovered_host(
+    disc_id: int,
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    """Hide a discovered container so future scans don't re-surface it."""
+    disc = db.get(DiscoveredHost, disc_id)
+    if disc:
+        disc.dismissed = True
+    return _stay(request)
 
 
 # --------------------------------------------------------------------------- #

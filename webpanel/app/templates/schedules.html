@@ -52,11 +52,21 @@
                     aria-label="{{ 'Disable schedule' if s.enabled else 'Enable schedule' }}">{{ icon('power', 16) }}</button></form>
         </td>
         <td class="text-end">
-          <button type="button" class="act-btn act-btn-danger"
-                  data-action="/schedules/{{ s.id }}/delete"
-                  data-title="Delete schedule" data-ok="Delete"
-                  data-confirm="Delete schedule “{{ s.name }}”?"
-                  title="Delete schedule" aria-label="Delete schedule {{ s.name }}">{{ icon('trash', 16) }}</button>
+          {% if current_role == 'admin' %}
+          <span class="act-group">
+            <button type="button" class="act-btn act-btn-primary"
+                    data-action="/schedules/{{ s.id }}/run"
+                    data-title="Run schedule now" data-ok="Run now"
+                    data-ok-class="{{ 'btn-warning' if s.mode == 'apply' else 'btn-primary' }}"
+                    data-confirm="Run “{{ s.name }}” now ({{ s.mode }})? This does not change its next scheduled run."
+                    title="Run now" aria-label="Run schedule {{ s.name }} now">{{ icon('play', 16) }}</button>
+            <button type="button" class="act-btn act-btn-danger"
+                    data-action="/schedules/{{ s.id }}/delete"
+                    data-title="Delete schedule" data-ok="Delete"
+                    data-confirm="Delete schedule “{{ s.name }}”?"
+                    title="Delete schedule" aria-label="Delete schedule {{ s.name }}">{{ icon('trash', 16) }}</button>
+          </span>
+          {% endif %}
         </td>
       </tr>
     {% else %}<tr><td colspan="6" class="text-muted">No schedules yet.</td></tr>{% endfor %}

@@ -6,9 +6,11 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..ansible_layer.service import JobBusyError, start_jobs
 from ..auth import current_user, require_admin, verify_csrf
 from ..db import db_dependency
 from ..models import AuditLog, HostGroup, Plugin, Schedule, Server, User
+from ..scheduler import _resolve_plugins, _resolve_targets
 from ..scheduler import manager as scheduler_manager
 from ..templating import render
 
@@ -72,6 +74,36 @@ def toggle_schedule(
     if sched:
         sched.enabled = not sched.enabled
         sched.next_run_at = None  # recompute on next tick
+    return RedirectResponse("/schedules", status_code=303)
+
+
+@router.post("/{schedule_id}/run", dependencies=[Depends(verify_csrf)])
+async def run_schedule(
+    schedule_id: int,
+    request: Request,
+    db: Session = Depends(db_dependency),
+    user: User = Depends(require_admin),
+):
+    """Fire a schedule on demand, without disturbing its cadence.
+
+    Resolves the same targets/plugins the scheduler child would, then dispatches
+    through the panel's job pool (start_jobs) instead of the child's blocking
+    executor — so a manual run streams live and shares the queue. ``next_run_at``
+    is left untouched: a one-off run must not shift the schedule."""
+    sched = db.get(Schedule, schedule_id)
+    if sched is None:
+        return RedirectResponse("/schedules", status_code=303)
+    targets = _resolve_targets(db, sched)
+    plugins = _resolve_plugins(db, sched)
+    if not targets or not plugins:
+        return render(request, "error.html", message="Nothing to run for this schedule.")
+    try:
+        await start_jobs(
+            db, user_id=user.id, server_ids=targets, plugin_ids=plugins, mode=sched.mode
+        )
+    except (JobBusyError, ValueError) as exc:
+        return render(request, "error.html", message=str(exc))
+    db.add(AuditLog(user_id=user.id, action="schedule.run", target=sched.name))
     return RedirectResponse("/schedules", status_code=303)
 
 

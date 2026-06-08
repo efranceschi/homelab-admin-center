@@ -18,7 +18,7 @@ from pathlib import Path
 from . import config, housekeeping
 from .ansible_layer import results
 from .db import session_scope
-from .models import HostState, Job, Server
+from .models import HostEvent, HostState, Job, Server
 
 
 class JobBusyError(RuntimeError):
@@ -289,12 +289,44 @@ class JobManager:
                 if new_status is not None:
                     state.last_status = new_status
                 state.reboot_required = srv.name in reboot_hosts
+                prev_status = state.config_status
                 cfg_status, pending = results.derive_config_state(
                     mode, stats, reachable=stats is not None
                 )
                 state.config_status = cfg_status
                 state.config_checked_at = finished
                 state.pending_changes = pending
+                self._record_host_event(
+                    db, sid, rt.job_id, mode, new_status, cfg_status,
+                    prev_status, pending, reachable=stats is not None,
+                )
+
+    @staticmethod
+    def _record_host_event(
+        db, server_id: int, job_id: int, mode: str, last_status: str | None,
+        cfg_status: str | None, prev_status: str | None, pending: int,
+        reachable: bool,
+    ) -> None:
+        """Append a host-history event for a finished run.
+
+        Applies are always logged (infrequent, state-changing); checks only on a
+        config-state transition or an unreachable/failed result, so daily drift
+        checks don't flood the timeline."""
+        if mode == "apply":
+            status = last_status or cfg_status
+            extra = f", {pending} change(s)" if pending else ""
+            msg = f"Apply finished: {status or 'unknown'}{extra}"
+        elif not reachable:
+            status, msg = "unreachable", "Check: host unreachable"
+        elif cfg_status != prev_status:
+            status = cfg_status
+            msg = f"Check: {prev_status or 'unknown'} → {cfg_status or 'unknown'}"
+        else:
+            return  # no-op check, nothing worth recording
+        db.add(HostEvent(
+            server_id=server_id, kind="apply" if mode == "apply" else "check",
+            status=status, message=msg, job_id=job_id,
+        ))
 
     @staticmethod
     def _cleanup_secrets(run_dir: Path) -> None:

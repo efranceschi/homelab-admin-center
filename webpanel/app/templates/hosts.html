@@ -15,6 +15,10 @@
     <button class="nav-link" id="tab-creds-btn" data-bs-toggle="tab" data-bs-target="#tab-creds"
             type="button" role="tab">{{ icon('key', 14) }} Credentials <span class="badge bg-secondary">{{ credentials|length }}</span></button>
   </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-discovered-btn" data-bs-toggle="tab" data-bs-target="#tab-discovered"
+            type="button" role="tab">{{ icon('search', 14) }} Discovered <span class="badge {{ 'bg-primary' if discovered_count else 'bg-secondary' }}">{{ discovered_count }}</span></button>
+  </li>
 </ul>
 
 <div class="tab-content border border-top-0 rounded-bottom bg-white mb-4">
@@ -79,7 +83,7 @@
         <tr class="host-row"
             data-search="{{ s.name|lower }}"
             data-groups="{{ ' ' ~ (s.groups | map(attribute='id') | join(' ')) ~ ' ' }}">
-          <td>{{ s.name }}</td>
+          <td><a href="/hosts/{{ s.id }}" class="hs-link" title="Host details & history">{{ s.name }}</a></td>
           <td><span class="badge conn-{{ s.connection_type }}">{{ s.connection_type }}</span></td>
           <td>
             {% if s.connection_type == 'proxmox' %}
@@ -159,6 +163,52 @@
         </tr>
       {% else %}
         <tr><td colspan="3" class="text-muted">No credentials yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+
+  {# ---- Discovered hosts tab ---- #}
+  <div class="tab-pane fade" id="tab-discovered" role="tabpanel">
+    <div class="d-flex justify-content-between align-items-center p-2 px-3 border-bottom">
+      <span class="text-muted small">Proxmox containers found on this node that aren't managed yet — scans run every 24h</span>
+      {% if current_role == 'admin' %}
+      <form method="post" action="/hosts/discover" class="d-inline m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="act-btn act-btn-secondary" title="Scan now"
+                aria-label="Scan for hosts now">{{ icon('refresh', 16) }}</button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Name</th><th>VMID</th><th>Status</th><th>First seen</th><th>Last seen</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+      {% for d in discovered %}
+        <tr>
+          <td>{{ d.name or 'ct' ~ d.proxmox_vmid }}</td>
+          <td>{{ d.proxmox_vmid }}</td>
+          <td><span class="badge conn-proxmox">{{ d.status or '—' }}</span></td>
+          <td class="small">{{ d.first_seen.strftime('%Y-%m-%d %H:%M UTC') if d.first_seen else '—' }}</td>
+          <td class="small">{{ d.last_seen.strftime('%Y-%m-%d %H:%M UTC') if d.last_seen else '—' }}</td>
+          <td class="text-end">
+            {% if current_role == 'admin' %}
+            <span class="act-group">
+              <button type="button" class="act-btn act-btn-primary"
+                      data-action="/hosts/discovered/{{ d.id }}/add"
+                      data-title="Add host" data-ok="Add" data-ok-class="btn-primary"
+                      data-confirm="Register “{{ d.name or 'ct' ~ d.proxmox_vmid }}” (VMID {{ d.proxmox_vmid }}) as a managed Proxmox host?"
+                      title="Add as managed host" aria-label="Add discovered host {{ d.name }}">{{ icon('plus', 16) }}</button>
+              <button type="button" class="act-btn act-btn-danger"
+                      data-action="/hosts/discovered/{{ d.id }}/dismiss"
+                      data-title="Dismiss" data-ok="Dismiss"
+                      data-confirm="Dismiss “{{ d.name or 'ct' ~ d.proxmox_vmid }}”? Future scans won't re-surface it."
+                      title="Dismiss" aria-label="Dismiss discovered host {{ d.name }}">{{ icon('trash', 16) }}</button>
+            </span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-muted">No undiscovered containers — run a scan.</td></tr>
       {% endfor %}
       </tbody>
     </table></div>

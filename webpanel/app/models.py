@@ -84,6 +84,10 @@ class Server(Base):
     state: Mapped["HostState | None"] = relationship(
         back_populates="server", cascade="all, delete-orphan", uselist=False
     )
+    events: Mapped[list["HostEvent"]] = relationship(
+        cascade="all, delete-orphan",
+        order_by="HostEvent.created_at.desc()",
+    )
 
 
 class HostGroup(Base):
@@ -233,6 +237,27 @@ class HostState(Base):
     server: Mapped[Server] = relationship(back_populates="state")
 
 
+class HostEvent(Base):
+    """A timestamped tracking event for a single host (its history timeline).
+
+    Records configuration check/apply outcomes and Proxmox container renames so
+    the host detail page can show what happened and when. Distinct from the
+    global :class:`AuditLog` (keyed by server id, survives renames, host-scoped).
+    """
+
+    __tablename__ = "host_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    server_id: Mapped[int] = mapped_column(
+        ForeignKey("servers.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # check|apply|name_sync
+    status: Mapped[str | None] = mapped_column(String(16))  # ok|changed|failed|updated|out_of_date
+    message: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Schedule(Base):
     """A recurring run definition, executed by the scheduler child process.
 
@@ -259,6 +284,31 @@ class Schedule(Base):
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class DiscoveredHost(Base):
+    """A server found by a discovery scan but not yet registered as a Server.
+
+    Persisted (rather than computed live) so a dismissal sticks across scans and
+    the headless 24h scanner has a sink. One row per discovered container, keyed
+    on ``(source, proxmox_vmid)`` for idempotent upserts. Confirming a row
+    creates a :class:`Server` and deletes the row; dismissing hides it.
+    """
+
+    __tablename__ = "discovered_hosts"
+    __table_args__ = (UniqueConstraint("source", "proxmox_vmid"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(16), default="proxmox")  # proxmox
+    proxmox_node: Mapped[str | None] = mapped_column(String(64))
+    proxmox_vmid: Mapped[str | None] = mapped_column(String(16))
+    name: Mapped[str | None] = mapped_column(String(128))
+    status: Mapped[str | None] = mapped_column(String(32))  # running | stopped
+    dismissed: Mapped[bool] = mapped_column(Boolean, default=False)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
 
 class Setting(Base):

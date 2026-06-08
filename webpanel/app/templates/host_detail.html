@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block nav_active %}hosts{% endblock %}
+{% block autorefresh %}1{% endblock %}
+{% block title %}{{ server.name }} · {{ app_name }}{% endblock %}
+{% block page_icon %}server{% endblock %}
+{% block page_title %}{{ server.name }}{% endblock %}
+{% block content %}
+{% set evt_icon = {'check': 'search', 'apply': 'play', 'name_sync': 'refresh'} %}
+{% set evt_cls = {
+  'ok': 'st-ok', 'updated': 'st-ok',
+  'changed': 'st-warn', 'out_of_date': 'st-warn',
+  'failed': 'st-error', 'unreachable': 'st-error'} %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/hosts">hosts</a></li>
+  <li class="breadcrumb-item active">{{ server.name }}</li>
+</ol></nav>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Host</span>
+    {% if current_role == 'admin' %}
+    <span class="act-group">
+      <button type="button" class="act-btn act-btn-secondary"
+              data-action="/hosts/{{ server.id }}/check"
+              data-title="Check host" data-ok="Run check" data-ok-class="btn-primary"
+              data-confirm="Run a configuration drift check (--check) against “{{ server.name }}”?"
+              title="Check host" aria-label="Check host">{{ icon('search', 16) }}</button>
+      <button type="button" class="act-btn act-btn-danger"
+              data-action="/hosts/{{ server.id }}/delete"
+              data-title="Delete host" data-ok="Delete"
+              data-confirm="Delete host “{{ server.name }}”? Its history is removed too."
+              title="Delete host" aria-label="Delete host">{{ icon('trash', 16) }}</button>
+    </span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Name</dt>
+      <dd class="col-sm-9">{{ server.name }}
+        {% if server.connection_type == 'proxmox' %}
+        <span class="text-muted small">(auto-synced from Proxmox)</span>{% endif %}</dd>
+      <dt class="col-sm-3">Type</dt>
+      <dd class="col-sm-9"><span class="badge conn-{{ server.connection_type }}">{{ server.connection_type }}</span></dd>
+      <dt class="col-sm-3">Target</dt>
+      <dd class="col-sm-9 mono">
+        {% if server.connection_type == 'proxmox' %}VMID {{ server.proxmox_vmid }}{% if server.proxmox_node %} on {{ server.proxmox_node }}{% endif %}
+        {% elif server.connection_type == 'ssh' %}{{ server.ssh_user }}@{{ server.address }}{% if server.port %}:{{ server.port }}{% endif %}
+        {% else %}localhost{% endif %}</dd>
+      <dt class="col-sm-3">Credential</dt>
+      <dd class="col-sm-9">{{ server.credential.name if server.credential else '—' }}</dd>
+      <dt class="col-sm-3">Enabled</dt>
+      <dd class="col-sm-9">{% if server.enabled %}<span class="st st-ok">yes</span>{% else %}<span class="st st-idle">no</span>{% endif %}</dd>
+      <dt class="col-sm-3">Config state</dt>
+      <dd class="col-sm-9">{% set st = state %}{% set live = None %}{% include "_host_state.html" %}</dd>
+      {% if state and state.reboot_required %}
+      <dt class="col-sm-3">Reboot</dt>
+      <dd class="col-sm-9"><span class="st st-warn">{{ icon('alert', 12) }} reboot required</span></dd>
+      {% endif %}
+    </dl>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">History <span class="text-muted small">(latest {{ events|length }})</span></div>
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>When</th><th>Event</th><th>Status</th><th>Details</th></tr></thead>
+    <tbody>
+    {% for e in events %}
+      <tr>
+        <td class="small mono">{{ e.created_at.strftime('%Y-%m-%d %H:%M UTC') if e.created_at else '—' }}</td>
+        <td>{{ icon(evt_icon.get(e.kind, 'activity'), 14) }} {{ e.kind }}</td>
+        <td>{% if e.status %}<span class="st {{ evt_cls.get(e.status, 'st-idle') }}">{{ e.status }}</span>{% else %}—{% endif %}</td>
+        <td>{% if e.job_id %}<a href="/jobs/{{ e.job_id }}" class="hs-link">{{ e.message }}</a>{% else %}{{ e.message }}{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="text-muted">No history yet — run a check or scan.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}
