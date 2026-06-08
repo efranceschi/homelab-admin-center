@@ -65,11 +65,16 @@ def _server_node(
     if nest_guests:
         for g in sorted(ctx.children_map.get(s.id, []), key=lambda x: x.name.lower()):
             children.append(_server_node(g, depth + 1, node_id, "guest", ctx, nest_guests=True))
-        # Docker containers running on this host, as display-only leaves.
-        for c in sorted(
-            ctx.docker_map.get(s.id, []),
-            key=lambda x: (x.name or x.container_id).lower(),
-        ):
+        # Docker containers, grouped by compose project (stack); containers with
+        # no project (e.g. `docker run`) render as leaves directly under the host.
+        stacks: dict[str, list[DockerContainer]] = {}
+        standalone: list[DockerContainer] = []
+        for c in ctx.docker_map.get(s.id, []):
+            proj = (c.compose_project or "").strip()
+            (stacks.setdefault(proj, []) if proj else standalone).append(c)
+        for proj in sorted(stacks, key=str.lower):
+            children.append(_docker_stack_node(proj, stacks[proj], depth + 1, node_id))
+        for c in sorted(standalone, key=lambda x: (x.name or x.container_id).lower()):
             children.append(_docker_node(c, depth + 1, node_id))
     # A virtualization host shows the expander even before a guest exists; inside
     # a group (nest_guests=False) members render as leaves regardless.
@@ -90,6 +95,40 @@ def _server_node(
         "synthetic": False,
         "data_search": s.name.lower(),
         "data_groups": " " + " ".join(str(g) for g in ctx.eff_groups.get(s.id, ())) + " ",
+        "children": children,
+    }
+
+
+def _docker_stack_node(
+    project: str, containers: list[DockerContainer], depth: int, parent_node_id: str
+) -> dict:
+    """A grouping band for a Docker Compose stack (compose project).
+
+    Synthetic and display-only: its container leaves point their ``data-parent``
+    at this node. Carries a running/total rollup for an at-a-glance health read.
+    """
+    node_id = f"{parent_node_id}/stack:{project}"
+    ordered = sorted(containers, key=lambda x: (x.name or x.container_id).lower())
+    children = [_docker_node(c, depth + 1, node_id) for c in ordered]
+    # Search text spans the project and every member so a container-name search
+    # still matches the (possibly collapsed) stack and the filter reveals it.
+    terms = [project] + [(c.name or "") + " " + (c.image or "") for c in containers]
+    return {
+        "kind": "stack",
+        "depth": depth,
+        "node_id": node_id,
+        "parent_id": parent_node_id,
+        "has_children": True,
+        "label": project,
+        "server": None,
+        "stack_total": len(containers),
+        "stack_running": sum(1 for c in containers if c.state == "running"),
+        "virt_kind": None,
+        "guest_type": None,
+        "is_guest": True,
+        "synthetic": True,
+        "data_search": " ".join(terms).lower(),
+        "data_groups": "  ",
         "children": children,
     }
 

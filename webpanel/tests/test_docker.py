@@ -179,3 +179,65 @@ def test_docker_containers_are_not_a_targeting_expansion(db):
     # Containers live outside `servers`, so they can never widen a target set.
     assert expand_group_hosts(db, []) == set()
     assert db.scalars(select(Server)).all() == [host]
+
+
+# --------------------------------------------------------------------------- #
+# stack (compose project) grouping
+# --------------------------------------------------------------------------- #
+def _dc(host_id, cid, name, project=None, state="running", **kw):
+    return DockerContainer(host_server_id=host_id, container_id=cid, name=name,
+                           compose_project=project, state=state, **kw)
+
+
+def test_compose_containers_group_under_one_stack_node(db):
+    host = _host(db, name="komodo", connection_type="proxmox", proxmox_vmid="120")
+    db.add(_dc(host.id, "a1", "web", project="blog"))
+    db.add(_dc(host.id, "a2", "db", project="blog"))
+    db.commit()
+
+    root = next(n for n in build_host_forest(db) if n["label"] == "komodo")
+    stacks = [c for c in root["children"] if c["kind"] == "stack"]
+    assert [s["label"] for s in stacks] == ["blog"]
+    stack = stacks[0]
+    assert stack["server"] is None and stack["has_children"] is True
+    # Containers nest under the stack, not directly under the host.
+    assert sorted(c["label"] for c in stack["children"]) == ["db", "web"]
+    assert all(c["kind"] == "docker" for c in stack["children"])
+    assert [c for c in root["children"] if c["kind"] == "docker"] == []
+
+
+def test_standalone_containers_render_directly_under_host(db):
+    host = _host(db, name="komodo", connection_type="proxmox", proxmox_vmid="120")
+    db.add(_dc(host.id, "s1", "loner", project=None))
+    db.add(_dc(host.id, "a1", "web", project="blog"))
+    db.commit()
+
+    root = next(n for n in build_host_forest(db) if n["label"] == "komodo")
+    kinds = {c["kind"] for c in root["children"]}
+    assert kinds == {"stack", "docker"}
+    leaves = [c for c in root["children"] if c["kind"] == "docker"]
+    assert [c["label"] for c in leaves] == ["loner"]
+
+
+def test_stack_rollup_counts_running_over_total(db):
+    host = _host(db, name="komodo", connection_type="proxmox", proxmox_vmid="120")
+    db.add(_dc(host.id, "a1", "web", project="blog", state="running"))
+    db.add(_dc(host.id, "a2", "db", project="blog", state="exited"))
+    db.add(_dc(host.id, "a3", "cache", project="blog", state="running"))
+    db.commit()
+
+    root = next(n for n in build_host_forest(db) if n["label"] == "komodo")
+    stack = next(c for c in root["children"] if c["kind"] == "stack")
+    assert stack["stack_total"] == 3
+    assert stack["stack_running"] == 2
+
+
+def test_multiple_stacks_sorted_alphabetically(db):
+    host = _host(db, name="komodo", connection_type="proxmox", proxmox_vmid="120")
+    db.add(_dc(host.id, "z1", "z", project="zeta"))
+    db.add(_dc(host.id, "a1", "a", project="alpha"))
+    db.commit()
+
+    root = next(n for n in build_host_forest(db) if n["label"] == "komodo")
+    stacks = [c["label"] for c in root["children"] if c["kind"] == "stack"]
+    assert stacks == ["alpha", "zeta"]

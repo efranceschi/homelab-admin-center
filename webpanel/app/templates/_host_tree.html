@@ -34,6 +34,11 @@
         {% else %}<span class="fw-semibold">{{ n.label }}</span>{% endif %}
         <span class="badge bg-warning-subtle text-warning-emphasis ms-1"
               title="Hosts VMs/containers — Check/Apply here does NOT touch its guests">virtualization host</span>
+      {% elif n.kind == 'stack' %}
+        <span class="tree-ico text-info">{{ icon('package', 14) }}</span>
+        <span class="fw-semibold mono">{{ n.label }}</span>
+        <span class="badge bg-info-subtle text-info-emphasis ms-1"
+              title="Docker Compose stack (compose project)">stack</span>
       {% elif n.kind == 'docker' %}
         <span class="tree-ico text-info">{{ icon('box', 13) }}</span>
         <span class="mono">{{ n.label }}</span>
@@ -66,6 +71,15 @@
         {% endif %}
       </td>
 
+    {% elif n.kind == 'stack' %}
+      {% set _all = n.stack_total and n.stack_running == n.stack_total %}
+      <td><span class="badge bg-info-subtle text-info-emphasis">stack</span></td>
+      <td colspan="4" class="small">
+        <span class="badge {{ 'bg-success-subtle text-success-emphasis' if _all else 'bg-secondary-subtle text-secondary-emphasis' }}"
+              title="Containers running / total in this stack">{{ n.stack_running }}/{{ n.stack_total }} running</span>
+      </td>
+      <td></td>
+
     {% elif n.kind == 'docker' %}
       {% set d = n.docker %}
       <td><span class="badge bg-info-subtle text-info-emphasis">docker</span></td>
@@ -75,7 +89,7 @@
         <span class="badge {{ 'bg-success-subtle text-success-emphasis' if _ok else 'bg-secondary-subtle text-secondary-emphasis' }}"
               title="{{ d.status }}">{{ d.status or d.state or 'unknown' }}</span>
       </td>
-      <td class="small text-muted">{{ d.compose_project or '—' }}</td>
+      <td class="small mono text-muted" title="Container ID">{{ d.container_id[:12] }}</td>
       <td></td>
       <td class="small text-muted text-truncate text-end" style="max-width:18ch" title="{{ d.ports }}">{{ d.ports }}</td>
 
