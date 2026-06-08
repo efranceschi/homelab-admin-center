@@ -201,6 +201,20 @@ def create_app() -> FastAPI:
     app.include_router(schedules_router.router)
     app.include_router(settings_router.router)
 
+    _HEALTH_PATHS = ("/health", "/healthcheck", "/status", "/healthz")
+
+    def _health(_request: Request):
+        """Unauthenticated liveness probe. Confirms the process is serving; does
+        NOT gate on job-pool state (a draining panel is still alive)."""
+        return JSONResponse({
+            "status": "ok",
+            "service": config.APP_NAME,
+            "version": config.APP_VERSION,
+        })
+
+    for _path in _HEALTH_PATHS:
+        app.add_api_route(_path, _health, methods=["GET"], include_in_schema=False)
+
     @app.get("/")
     def index(request: Request):
         if request.session.get("user_id"):
