@@ -8,5 +8,5 @@ python-multipart>=0.0.32
 itsdangerous>=2.2.0
 sqlalchemy>=2.0
 argon2-cffi>=23.1
-cryptography>=42.0
+cryptography>=49.0.0
 pyyaml>=6.0.3
