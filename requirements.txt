@@ -3,5 +3,5 @@ ansible-core>=2.18,<2.19
 # proxmoxer + requests: required only for the SECONDARY path
 # (community.general.proxmox dynamic inventory via API). Kept here so the
 # SSH/future path works without changing requirements.
-proxmoxer>=2.0
+proxmoxer>=2.3.0
 requests>=2.34.2
