@@ -9,4 +9,4 @@ httpx>=0.28.1            # required by fastapi.testclient.TestClient
 
 # Needed to import the Ansible connection plugin (plugins/connection/pct.py)
 # in tests/test_connection_pct.py. Mirrors the version pin in requirements.txt.
-ansible-core>=2.18,<2.19
+ansible-core>=2.21.0,<2.22

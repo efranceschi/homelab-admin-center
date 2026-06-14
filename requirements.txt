@@ -1,5 +1,5 @@
 # Python dependencies for the ephemeral/persistent venv (installed by run.sh).
-ansible-core>=2.18,<2.19
+ansible-core>=2.21.0,<2.22
 # proxmoxer + requests: required only for the SECONDARY path
 # (community.general.proxmox dynamic inventory via API). Kept here so the
 # SSH/future path works without changing requirements.
